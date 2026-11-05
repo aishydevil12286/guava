@@ -16,13 +16,16 @@
 
 package com.google.common.collect;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import com.google.common.annotations.GwtCompatible;
 import com.google.common.annotations.GwtIncompatible;
-
+import com.google.common.annotations.J2ktIncompatible;
 import java.io.Serializable;
 import java.util.Map.Entry;
-
-import javax.annotation.Nullable;
+import java.util.Spliterator;
+import java.util.function.Consumer;
+import org.jspecify.annotations.Nullable;
 
 /**
  * {@code values()} implementation for {@link ImmutableMap}.
@@ -30,10 +33,10 @@ import javax.annotation.Nullable;
  * @author Jesse Wilson
  * @author Kevin Bourrillion
  */
-@GwtCompatible(emulated = true)
+@GwtCompatible
 final class ImmutableMapValues<K, V> extends ImmutableCollection<V> {
   private final ImmutableMap<K, V> map;
-  
+
   ImmutableMapValues(ImmutableMap<K, V> map) {
     this.map = map;
   }
@@ -48,14 +51,25 @@ final class ImmutableMapValues<K, V> extends ImmutableCollection<V> {
     return new UnmodifiableIterator<V>() {
       final UnmodifiableIterator<Entry<K, V>> entryItr = map.entrySet().iterator();
 
-      @Override public boolean hasNext() {
+      @Override
+      public boolean hasNext() {
         return entryItr.hasNext();
       }
 
-      @Override public V next() {
+      @Override
+      public V next() {
         return entryItr.next().getValue();
-      }      
+      }
     };
+  }
+
+  @Override
+  @GwtIncompatible // Spliterator
+  public Spliterator<V> spliterator() {
+    return CollectSpliterators.map(
+        map.entrySet().spliterator(),
+        Spliterator.ORDERED | Spliterator.IMMUTABLE | Spliterator.NONNULL,
+        Entry::getValue);
   }
 
   @Override
@@ -69,8 +83,8 @@ final class ImmutableMapValues<K, V> extends ImmutableCollection<V> {
   }
 
   @Override
-  ImmutableList<V> createAsList() {
-    final ImmutableList<Entry<K, V>> entryList = map.entrySet().asList();
+  public ImmutableList<V> asList() {
+    ImmutableList<Entry<K, V>> entryList = map.entrySet().asList();
     return new ImmutableAsList<V>() {
       @Override
       public V get(int index) {
@@ -81,23 +95,55 @@ final class ImmutableMapValues<K, V> extends ImmutableCollection<V> {
       ImmutableCollection<V> delegateCollection() {
         return ImmutableMapValues.this;
       }
+
+      // redeclare to help optimizers with b/310253115
+      @SuppressWarnings("RedundantOverride")
+      @Override
+      @J2ktIncompatible
+      @GwtIncompatible
+            Object writeReplace() {
+        return super.writeReplace();
+      }
     };
   }
 
-  @GwtIncompatible("serialization")
-  @Override Object writeReplace() {
-    return new SerializedForm<V>(map);
+  @GwtIncompatible
+  @Override
+  public void forEach(Consumer<? super V> action) {
+    checkNotNull(action);
+    map.forEach((k, v) -> action.accept(v));
   }
 
-  @GwtIncompatible("serialization")
-  private static class SerializedForm<V> implements Serializable {
+  // redeclare to help optimizers with b/310253115
+  @SuppressWarnings("RedundantOverride")
+  @Override
+  @J2ktIncompatible
+  @GwtIncompatible
+    Object writeReplace() {
+    return super.writeReplace();
+  }
+
+  @GwtIncompatible
+  @J2ktIncompatible
+  /*
+   * The mainline copy of ImmutableMapValues doesn't produce this serialized form anymore, though
+   * the backport does. For now, we're keeping the class declaration in *both* flavors so that both
+   * flavors can read old data or data from the other flavor. However, we strongly discourage
+   * relying on this, as we have made incompatible changes to serialized forms in the past and
+   * expect to do so again, as discussed in https://github.com/google/guava#important-warnings.
+   */
+  @SuppressWarnings("unused")
+  private static final class SerializedForm<V> implements Serializable {
     final ImmutableMap<?, V> map;
+
     SerializedForm(ImmutableMap<?, V> map) {
       this.map = map;
     }
-    Object readResolve() {
+
+        Object readResolve() {
       return map.values();
     }
+
     private static final long serialVersionUID = 0;
   }
 }

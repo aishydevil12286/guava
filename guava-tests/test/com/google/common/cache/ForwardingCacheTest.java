@@ -16,115 +16,103 @@
 
 package com.google.common.cache;
 
-import static org.easymock.EasyMock.createMock;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.verify;
+import static com.google.common.truth.Truth.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import com.google.common.annotations.GwtIncompatible;
+import com.google.common.annotations.J2ktIncompatible;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-
+import com.google.errorprone.annotations.Keep;
+import java.util.concurrent.ConcurrentHashMap;
 import junit.framework.TestCase;
-
-import java.util.concurrent.ExecutionException;
+import org.jspecify.annotations.NullUnmarked;
 
 /**
  * Unit test for {@link ForwardingCache}.
  *
  * @author Charles Fry
  */
+@GwtIncompatible
+@J2ktIncompatible
+@NullUnmarked
 public class ForwardingCacheTest extends TestCase {
   private Cache<String, Boolean> forward;
   private Cache<String, Boolean> mock;
 
-  @SuppressWarnings("unchecked") // createMock
-  @Override public void setUp() throws Exception {
+  @SuppressWarnings({"unchecked", "DoNotMock"}) // mock
+  @Override
+  protected void setUp() throws Exception {
     super.setUp();
     /*
      * Class parameters must be raw, so we can't create a proxy with generic
      * type arguments. The created proxy only records calls and returns null, so
      * the type is irrelevant at runtime.
      */
-    mock = createMock(Cache.class);
-    forward = new ForwardingCache<String, Boolean>() {
-      @Override protected Cache<String, Boolean> delegate() {
-        return mock;
-      }
-    };
+    mock = mock(Cache.class);
+    forward =
+        new ForwardingCache<String, Boolean>() {
+          @Override
+          protected Cache<String, Boolean> delegate() {
+            return mock;
+          }
+        };
   }
 
-  public void testGetIfPresent() throws ExecutionException {
-    expect(mock.getIfPresent("key")).andReturn(Boolean.TRUE);
-    replay(mock);
-    assertSame(Boolean.TRUE, forward.getIfPresent("key"));
-    verify(mock);
+  public void testGetIfPresent() {
+    when(mock.getIfPresent("key")).thenReturn(true);
+    assertThat(forward.getIfPresent("key")).isEqualTo(true);
   }
 
-  public void testGetAllPresent() throws ExecutionException {
-    expect(mock.getAllPresent(ImmutableList.of("key")))
-        .andReturn(ImmutableMap.of("key", Boolean.TRUE));
-    replay(mock);
-    assertEquals(ImmutableMap.of("key", Boolean.TRUE),
-        forward.getAllPresent(ImmutableList.of("key")));
-    verify(mock);
+  public void testGetAllPresent() {
+    when(mock.getAllPresent(ImmutableList.of("key"))).thenReturn(ImmutableMap.of("key", true));
+    assertThat(forward.getAllPresent(ImmutableList.of("key"))).containsExactly("key", true);
   }
 
   public void testInvalidate() {
-    mock.invalidate("key");
-    replay(mock);
     forward.invalidate("key");
-    verify(mock);
+    verify(mock).invalidate("key");
   }
 
   public void testInvalidateAllIterable() {
-    mock.invalidateAll(ImmutableList.of("key"));
-    replay(mock);
     forward.invalidateAll(ImmutableList.of("key"));
-    verify(mock);
+    verify(mock).invalidateAll(ImmutableList.of("key"));
   }
 
   public void testInvalidateAll() {
-    mock.invalidateAll();
-    replay(mock);
     forward.invalidateAll();
-    verify(mock);
+    verify(mock).invalidateAll();
   }
 
   public void testSize() {
-    expect(mock.size()).andReturn(0L);
-    replay(mock);
-    forward.size();
-    verify(mock);
+    when(mock.size()).thenReturn(42L);
+    assertThat(forward.size()).isEqualTo(42);
   }
 
   public void testStats() {
-    expect(mock.stats()).andReturn(null);
-    replay(mock);
-    assertNull(forward.stats());
-    verify(mock);
+    CacheStats stats = new CacheStats(0, 0, 0, 0, 0, 0);
+    when(mock.stats()).thenReturn(stats);
+    assertThat(forward.stats()).isEqualTo(stats);
   }
 
   public void testAsMap() {
-    expect(mock.asMap()).andReturn(null);
-    replay(mock);
-    assertNull(forward.asMap());
-    verify(mock);
+    when(mock.asMap()).thenReturn(new ConcurrentHashMap<>(ImmutableMap.of("key", true)));
+    assertThat(forward.asMap()).containsExactly("key", true);
   }
 
   public void testCleanUp() {
-    mock.cleanUp();
-    replay(mock);
     forward.cleanUp();
-    verify(mock);
+    verify(mock).cleanUp();
   }
 
-  /**
-   * Make sure that all methods are forwarded.
-   */
+  /** Make sure that all methods are forwarded. */
+  @Keep
   private static class OnlyGet<K, V> extends ForwardingCache<K, V> {
     @Override
     protected Cache<K, V> delegate() {
-      return null;
+      throw new AssertionError();
     }
   }
 }

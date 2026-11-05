@@ -16,6 +16,7 @@
 
 package com.google.common.collect.testing;
 
+import com.google.common.annotations.GwtIncompatible;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -27,12 +28,12 @@ import java.util.List;
 /**
  * Reserializes the sets created by another test set generator.
  *
- * TODO: make CollectionTestSuiteBuilder test reserialized collections
+ * <p>TODO: make CollectionTestSuiteBuilder test reserialized collections
  *
  * @author Jesse Wilson
  */
-public class ReserializingTestCollectionGenerator<E>
-    implements TestCollectionGenerator<E> {
+@GwtIncompatible
+public class ReserializingTestCollectionGenerator<E> implements TestCollectionGenerator<E> {
   private final TestCollectionGenerator<E> delegate;
 
   ReserializingTestCollectionGenerator(TestCollectionGenerator<E> delegate) {
@@ -41,7 +42,7 @@ public class ReserializingTestCollectionGenerator<E>
 
   public static <E> ReserializingTestCollectionGenerator<E> newInstance(
       TestCollectionGenerator<E> delegate) {
-    return new ReserializingTestCollectionGenerator<E>(delegate);
+    return new ReserializingTestCollectionGenerator<>(delegate);
   }
 
   @Override
@@ -55,15 +56,11 @@ public class ReserializingTestCollectionGenerator<E>
       ByteArrayOutputStream bytes = new ByteArrayOutputStream();
       ObjectOutputStream out = new ObjectOutputStream(bytes);
       out.writeObject(object);
-      ObjectInputStream in = new ObjectInputStream(
-          new ByteArrayInputStream(bytes.toByteArray()));
+      ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()));
       return (T) in.readObject();
-    } catch (IOException e) {
-      Helpers.fail(e, e.getMessage());
-    } catch (ClassNotFoundException e) {
-      Helpers.fail(e, e.getMessage());
+    } catch (IOException | ClassNotFoundException e) {
+      throw new AssertionError(e);
     }
-    throw new AssertionError("not reachable");
   }
 
   @Override

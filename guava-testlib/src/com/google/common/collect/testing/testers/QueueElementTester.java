@@ -20,17 +20,16 @@ import static com.google.common.collect.testing.features.CollectionFeature.KNOWN
 import static com.google.common.collect.testing.features.CollectionSize.ONE;
 import static com.google.common.collect.testing.features.CollectionSize.SEVERAL;
 import static com.google.common.collect.testing.features.CollectionSize.ZERO;
+import static org.junit.Assert.assertThrows;
 
 import com.google.common.annotations.GwtCompatible;
 import com.google.common.collect.testing.features.CollectionFeature;
 import com.google.common.collect.testing.features.CollectionSize;
-
 import java.util.NoSuchElementException;
 
 /**
- * A generic JUnit test which tests {@code element()} operations on a queue.
- * Can't be invoked directly; please see
- * {@link com.google.common.collect.testing.CollectionTestSuiteBuilder}.
+ * A generic JUnit test which tests {@code element()} operations on a queue. Can't be invoked
+ * directly; please see {@link com.google.common.collect.testing.CollectionTestSuiteBuilder}.
  *
  * @author Jared Levy
  */
@@ -38,25 +37,20 @@ import java.util.NoSuchElementException;
 public class QueueElementTester<E> extends AbstractQueueTester<E> {
   @CollectionSize.Require(ZERO)
   public void testElement_empty() {
-    try {
-      getQueue().element();
-      fail("emptyQueue.element() should throw");
-    } catch (NoSuchElementException expected) {}
+    assertThrows(NoSuchElementException.class, () -> getQueue().element());
     expectUnchanged();
   }
 
   @CollectionSize.Require(ONE)
   public void testElement_size1() {
-    assertEquals("size1Queue.element() should return first element",
-        e0(), getQueue().element());
+    assertEquals("size1Queue.element() should return first element", e0(), getQueue().element());
     expectUnchanged();
   }
 
   @CollectionFeature.Require(KNOWN_ORDER)
   @CollectionSize.Require(SEVERAL)
   public void testElement_sizeMany() {
-    assertEquals("sizeManyQueue.element() should return first element",
-        e0(), getQueue().element());
+    assertEquals("sizeManyQueue.element() should return first element", e0(), getQueue().element());
     expectUnchanged();
   }
 }

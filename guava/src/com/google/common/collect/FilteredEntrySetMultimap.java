@@ -16,52 +16,62 @@
 
 package com.google.common.collect;
 
+import static com.google.common.collect.Sets.equalsImpl;
+import static com.google.common.collect.Sets.hashCodeImpl;
+
 import com.google.common.annotations.GwtCompatible;
 import com.google.common.base.Predicate;
-
 import java.util.Map.Entry;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Implementation of {@link Multimaps#filterEntries(SetMultimap, Predicate)}.
- * 
+ *
  * @author Louis Wasserman
  */
 @GwtCompatible
-final class FilteredEntrySetMultimap<K, V> extends FilteredEntryMultimap<K, V>
-    implements FilteredSetMultimap<K, V> {
+final class FilteredEntrySetMultimap<K extends @Nullable Object, V extends @Nullable Object>
+    extends FilteredEntryMultimap<K, V> implements FilteredSetMultimap<K, V> {
 
   FilteredEntrySetMultimap(SetMultimap<K, V> unfiltered, Predicate<? super Entry<K, V>> predicate) {
     super(unfiltered, predicate);
   }
-  
+
   @Override
   public SetMultimap<K, V> unfiltered() {
     return (SetMultimap<K, V>) unfiltered;
   }
 
   @Override
-  public Set<V> get(K key) {
+  public Set<V> get(@ParametricNullness K key) {
     return (Set<V>) super.get(key);
   }
-  
+
   @Override
-  public Set<V> removeAll(Object key) {
+  public Set<V> removeAll(@Nullable Object key) {
     return (Set<V>) super.removeAll(key);
   }
 
   @Override
-  public Set<V> replaceValues(K key, Iterable<? extends V> values) {
+  public Set<V> replaceValues(@ParametricNullness K key, Iterable<? extends V> values) {
     return (Set<V>) super.replaceValues(key, values);
   }
 
   @Override
-  Set<Entry<K, V>> createEntries() {
-    return Sets.filter(unfiltered().entries(), entryPredicate());
+  public Set<Entry<K, V>> entries() {
+    return new EntrySet();
   }
 
-  @Override
-  public Set<Entry<K, V>> entries() {
-    return (Set<Entry<K, V>>) super.entries();
+  private final class EntrySet extends Entries implements Set<Entry<K, V>> {
+    @Override
+    public int hashCode() {
+      return hashCodeImpl(this);
+    }
+
+    @Override
+    public boolean equals(@Nullable Object o) {
+      return equalsImpl(this, o);
+    }
   }
 }

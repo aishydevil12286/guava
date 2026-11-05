@@ -16,54 +16,61 @@
 
 package com.google.common.collect;
 
-import com.google.common.annotations.Beta;
-import com.google.common.annotations.GwtCompatible;
-import com.google.common.base.Objects;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.collect.Maps.containsKeyImpl;
+import static com.google.common.collect.Maps.containsValueImpl;
+import static com.google.common.collect.Maps.equalsImpl;
+import static com.google.common.collect.Maps.putAllImpl;
+import static com.google.common.collect.Maps.toStringImpl;
+import static com.google.common.collect.Sets.hashCodeImpl;
 
+import com.google.common.annotations.GwtCompatible;
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
-
-import javax.annotation.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
- * A map which forwards all its method calls to another map. Subclasses should
- * override one or more methods to modify the behavior of the backing map as
- * desired per the <a
+ * A map which forwards all its method calls to another map. Subclasses should override one or more
+ * methods to modify the behavior of the backing map as desired per the <a
  * href="http://en.wikipedia.org/wiki/Decorator_pattern">decorator pattern</a>.
  *
- * <p><i>Warning:</i> The methods of {@code ForwardingMap} forward
- * <i>indiscriminately</i> to the methods of the delegate. For example,
- * overriding {@link #put} alone <i>will not</i> change the behavior of {@link
- * #putAll}, which can lead to unexpected behavior. In this case, you should
- * override {@code putAll} as well, either providing your own implementation, or
- * delegating to the provided {@code standardPutAll} method.
+ * <p><b>Warning:</b> The methods of {@code ForwardingMap} forward <i>indiscriminately</i> to the
+ * methods of the delegate. For example, overriding {@link #put} alone <i>will not</i> change the
+ * behavior of {@link #putAll}, which can lead to unexpected behavior. In this case, you should
+ * override {@code putAll} as well, either providing your own implementation, or delegating to the
+ * provided {@code standardPutAll} method.
  *
- * <p>Each of the {@code standard} methods, where appropriate, use {@link
- * Objects#equal} to test equality for both keys and values. This may not be
- * the desired behavior for map implementations that use non-standard notions of
- * key equality, such as a {@code SortedMap} whose comparator is not consistent
- * with {@code equals}.
+ * <p><b>{@code default} method warning:</b> This class does <i>not</i> forward calls to {@code
+ * default} methods. Instead, it inherits their default implementations. When those implementations
+ * invoke methods, they invoke methods on the {@code ForwardingMap}.
  *
- * <p>The {@code standard} methods and the collection views they return are not
- * guaranteed to be thread-safe, even when all of the methods that they depend
- * on are thread-safe.
+ * <p>Each of the {@code standard} methods, where appropriate, use {@link Objects#equals} to test
+ * equality for both keys and values. This may not be the desired behavior for map implementations
+ * that use non-standard notions of key equality, such as a {@code SortedMap} whose comparator is
+ * not consistent with {@code equals}.
+ *
+ * <p>The {@code standard} methods and the collection views they return are not guaranteed to be
+ * thread-safe, even when all of the methods that they depend on are thread-safe.
  *
  * @author Kevin Bourrillion
  * @author Jared Levy
  * @author Louis Wasserman
- * @since 2.0 (imported from Google Collections Library)
+ * @since 2.0
  */
 @GwtCompatible
-public abstract class ForwardingMap<K, V> extends ForwardingObject
-    implements Map<K, V> {
-  // TODO(user): identify places where thread safety is actually lost
+public abstract class ForwardingMap<K extends @Nullable Object, V extends @Nullable Object>
+    extends ForwardingObject implements Map<K, V> {
+  // TODO(lowasser): identify places where thread safety is actually lost
 
   /** Constructor for use by subclasses. */
   protected ForwardingMap() {}
 
-  @Override protected abstract Map<K, V> delegate();
+  @Override
+  protected abstract Map<K, V> delegate();
 
   @Override
   public int size() {
@@ -75,9 +82,10 @@ public abstract class ForwardingMap<K, V> extends ForwardingObject
     return delegate().isEmpty();
   }
 
+  @CanIgnoreReturnValue
   @Override
-  public V remove(Object object) {
-    return delegate().remove(object);
+  public @Nullable V remove(@Nullable Object key) {
+    return delegate().remove(key);
   }
 
   @Override
@@ -96,12 +104,13 @@ public abstract class ForwardingMap<K, V> extends ForwardingObject
   }
 
   @Override
-  public V get(@Nullable Object key) {
+  public @Nullable V get(@Nullable Object key) {
     return delegate().get(key);
   }
 
+  @CanIgnoreReturnValue
   @Override
-  public V put(K key, V value) {
+  public @Nullable V put(@ParametricNullness K key, @ParametricNullness V value) {
     return delegate().put(key, value);
   }
 
@@ -125,43 +134,42 @@ public abstract class ForwardingMap<K, V> extends ForwardingObject
     return delegate().entrySet();
   }
 
-  @Override public boolean equals(@Nullable Object object) {
+  @Override
+  public boolean equals(@Nullable Object object) {
     return object == this || delegate().equals(object);
   }
 
-  @Override public int hashCode() {
+  @Override
+  public int hashCode() {
     return delegate().hashCode();
   }
 
   /**
-   * A sensible definition of {@link #putAll(Map)} in terms of {@link
-   * #put(Object, Object)}. If you override {@link #put(Object, Object)}, you
-   * may wish to override {@link #putAll(Map)} to forward to this
-   * implementation.
+   * A sensible definition of {@link #putAll(Map)} in terms of {@link #put(Object, Object)}. If you
+   * override {@link #put(Object, Object)}, you may wish to override {@link #putAll(Map)} to forward
+   * to this implementation.
    *
    * @since 7.0
    */
   protected void standardPutAll(Map<? extends K, ? extends V> map) {
-    Maps.putAllImpl(this, map);
+    putAllImpl(this, map);
   }
 
   /**
-   * A sensible, albeit inefficient, definition of {@link #remove} in terms of
-   * the {@code iterator} method of {@link #entrySet}. If you override {@link
-   * #entrySet}, you may wish to override {@link #remove} to forward to this
-   * implementation.
+   * A sensible, albeit inefficient, definition of {@link #remove} in terms of the {@code iterator}
+   * method of {@link #entrySet}. If you override {@link #entrySet}, you may wish to override {@link
+   * #remove} to forward to this implementation.
    *
-   * <p>Alternately, you may wish to override {@link #remove} with {@code
-   * keySet().remove}, assuming that approach would not lead to an infinite
-   * loop.
+   * <p>Alternately, you may wish to override {@link #remove} with {@code keySet().remove}, assuming
+   * that approach would not lead to an infinite loop.
    *
    * @since 7.0
    */
-  @Beta protected V standardRemove(@Nullable Object key) {
+  protected @Nullable V standardRemove(@Nullable Object key) {
     Iterator<Entry<K, V>> entryIterator = entrySet().iterator();
     while (entryIterator.hasNext()) {
       Entry<K, V> entry = entryIterator.next();
-      if (Objects.equal(entry.getKey(), key)) {
+      if (Objects.equals(entry.getKey(), key)) {
         V value = entry.getValue();
         entryIterator.remove();
         return value;
@@ -171,9 +179,9 @@ public abstract class ForwardingMap<K, V> extends ForwardingObject
   }
 
   /**
-   * A sensible definition of {@link #clear} in terms of the {@code iterator}
-   * method of {@link #entrySet}. In many cases, you may wish to override
-   * {@link #clear} to forward to this implementation.
+   * A sensible definition of {@link #clear} in terms of the {@code iterator} method of {@link
+   * #entrySet}. In many cases, you may wish to override {@link #clear} to forward to this
+   * implementation.
    *
    * @since 7.0
    */
@@ -182,17 +190,14 @@ public abstract class ForwardingMap<K, V> extends ForwardingObject
   }
 
   /**
-   * A sensible implementation of {@link Map#keySet} in terms of the following
-   * methods: {@link ForwardingMap#clear}, {@link ForwardingMap#containsKey},
-   * {@link ForwardingMap#isEmpty}, {@link ForwardingMap#remove}, {@link
-   * ForwardingMap#size}, and the {@link Set#iterator} method of {@link
-   * ForwardingMap#entrySet}. In many cases, you may wish to override {@link
-   * ForwardingMap#keySet} to forward to this implementation or a subclass
-   * thereof.
+   * A sensible implementation of {@link Map#keySet} in terms of the following methods: {@link
+   * ForwardingMap#clear}, {@link ForwardingMap#containsKey}, {@link ForwardingMap#isEmpty}, {@link
+   * ForwardingMap#remove}, {@link ForwardingMap#size}, and the {@link Set#iterator} method of
+   * {@link ForwardingMap#entrySet}. In many cases, you may wish to override {@link
+   * ForwardingMap#keySet} to forward to this implementation or a subclass thereof.
    *
    * @since 10.0
    */
-  @Beta
   protected class StandardKeySet extends Maps.KeySet<K, V> {
     /** Constructor for use by subclasses. */
     public StandardKeySet() {
@@ -201,28 +206,25 @@ public abstract class ForwardingMap<K, V> extends ForwardingObject
   }
 
   /**
-   * A sensible, albeit inefficient, definition of {@link #containsKey} in terms
-   * of the {@code iterator} method of {@link #entrySet}. If you override {@link
-   * #entrySet}, you may wish to override {@link #containsKey} to forward to
-   * this implementation.
+   * A sensible, albeit inefficient, definition of {@link #containsKey} in terms of the {@code
+   * iterator} method of {@link #entrySet}. If you override {@link #entrySet}, you may wish to
+   * override {@link #containsKey} to forward to this implementation.
    *
    * @since 7.0
    */
-  @Beta protected boolean standardContainsKey(@Nullable Object key) {
-    return Maps.containsKeyImpl(this, key);
+  protected boolean standardContainsKey(@Nullable Object key) {
+    return containsKeyImpl(this, key);
   }
 
   /**
-   * A sensible implementation of {@link Map#values} in terms of the following
-   * methods: {@link ForwardingMap#clear}, {@link ForwardingMap#containsValue},
-   * {@link ForwardingMap#isEmpty}, {@link ForwardingMap#size}, and the {@link
-   * Set#iterator} method of {@link ForwardingMap#entrySet}. In many cases, you
-   * may wish to override {@link ForwardingMap#values} to forward to this
-   * implementation or a subclass thereof.
+   * A sensible implementation of {@link Map#values} in terms of the following methods: {@link
+   * ForwardingMap#clear}, {@link ForwardingMap#containsValue}, {@link ForwardingMap#isEmpty},
+   * {@link ForwardingMap#size}, and the {@link Set#iterator} method of {@link
+   * ForwardingMap#entrySet}. In many cases, you may wish to override {@link ForwardingMap#values}
+   * to forward to this implementation or a subclass thereof.
    *
    * @since 10.0
    */
-  @Beta
   protected class StandardValues extends Maps.Values<K, V> {
     /** Constructor for use by subclasses. */
     public StandardValues() {
@@ -231,31 +233,28 @@ public abstract class ForwardingMap<K, V> extends ForwardingObject
   }
 
   /**
-   * A sensible definition of {@link #containsValue} in terms of the {@code
-   * iterator} method of {@link #entrySet}. If you override {@link #entrySet},
-   * you may wish to override {@link #containsValue} to forward to this
-   * implementation.
+   * A sensible definition of {@link #containsValue} in terms of the {@code iterator} method of
+   * {@link #entrySet}. If you override {@link #entrySet}, you may wish to override {@link
+   * #containsValue} to forward to this implementation.
    *
    * @since 7.0
    */
   protected boolean standardContainsValue(@Nullable Object value) {
-    return Maps.containsValueImpl(this, value);
+    return containsValueImpl(this, value);
   }
 
   /**
-   * A sensible implementation of {@link Map#entrySet} in terms of the following
-   * methods: {@link ForwardingMap#clear}, {@link ForwardingMap#containsKey},
-   * {@link ForwardingMap#get}, {@link ForwardingMap#isEmpty}, {@link
-   * ForwardingMap#remove}, and {@link ForwardingMap#size}. In many cases, you
-   * may wish to override {@link #entrySet} to forward to this implementation
-   * or a subclass thereof.
+   * A sensible implementation of {@link Map#entrySet} in terms of the following methods: {@link
+   * ForwardingMap#clear}, {@link ForwardingMap#containsKey}, {@link ForwardingMap#get}, {@link
+   * ForwardingMap#isEmpty}, {@link ForwardingMap#remove}, and {@link ForwardingMap#size}. In many
+   * cases, you may wish to override {@link #entrySet} to forward to this implementation or a
+   * subclass thereof.
    *
    * @since 10.0
    */
-  @Beta
   protected abstract class StandardEntrySet extends Maps.EntrySet<K, V> {
     /** Constructor for use by subclasses. */
-    public StandardEntrySet() {}
+    protected StandardEntrySet() {}
 
     @Override
     Map<K, V> map() {
@@ -264,9 +263,9 @@ public abstract class ForwardingMap<K, V> extends ForwardingObject
   }
 
   /**
-   * A sensible definition of {@link #isEmpty} in terms of the {@code iterator}
-   * method of {@link #entrySet}. If you override {@link #entrySet}, you may
-   * wish to override {@link #isEmpty} to forward to this implementation.
+   * A sensible definition of {@link #isEmpty} in terms of the {@code iterator} method of {@link
+   * #entrySet}. If you override {@link #entrySet}, you may wish to override {@link #isEmpty} to
+   * forward to this implementation.
    *
    * @since 7.0
    */
@@ -275,35 +274,57 @@ public abstract class ForwardingMap<K, V> extends ForwardingObject
   }
 
   /**
-   * A sensible definition of {@link #equals} in terms of the {@code equals}
-   * method of {@link #entrySet}. If you override {@link #entrySet}, you may
-   * wish to override {@link #equals} to forward to this implementation.
+   * A sensible definition of {@link #equals} in terms of the {@code equals} method of {@link
+   * #entrySet}. If you override {@link #entrySet}, you may wish to override {@link #equals} to
+   * forward to this implementation.
    *
    * @since 7.0
    */
   protected boolean standardEquals(@Nullable Object object) {
-    return Maps.equalsImpl(this, object);
+    return equalsImpl(this, object);
   }
 
   /**
-   * A sensible definition of {@link #hashCode} in terms of the {@code iterator}
-   * method of {@link #entrySet}. If you override {@link #entrySet}, you may
-   * wish to override {@link #hashCode} to forward to this implementation.
+   * A sensible definition of {@link #hashCode} in terms of the {@code iterator} method of {@link
+   * #entrySet}. If you override {@link #entrySet}, you may wish to override {@link #hashCode} to
+   * forward to this implementation.
    *
    * @since 7.0
    */
   protected int standardHashCode() {
-    return Sets.hashCodeImpl(entrySet());
+    return hashCodeImpl(entrySet());
   }
 
   /**
-   * A sensible definition of {@link #toString} in terms of the {@code iterator}
-   * method of {@link #entrySet}. If you override {@link #entrySet}, you may
-   * wish to override {@link #toString} to forward to this implementation.
+   * A sensible definition of {@link #toString} in terms of the {@code iterator} method of {@link
+   * #entrySet}. If you override {@link #entrySet}, you may wish to override {@link #toString} to
+   * forward to this implementation.
    *
    * @since 7.0
    */
   protected String standardToString() {
-    return Maps.toStringImpl(this);
+    return toStringImpl(this);
+  }
+
+  /**
+   * A simplified version of {@link ForwardingMap} where subclasses can pass in an already
+   * constructed {@link Map} as the delegate.
+   *
+   * <p>TODO(b/3417232): Consider making this public, but take into consideration whether it would
+   * then appear as a user-visible supertype for any classes.
+   */
+  abstract static class SimpleForwardingMap<K extends @Nullable Object, V extends @Nullable Object>
+      extends ForwardingMap<K, V> {
+    private final Map<K, V> delegate;
+
+    /** Constructor for use by subclasses. */
+    SimpleForwardingMap(Map<K, V> delegate) {
+      this.delegate = checkNotNull(delegate);
+    }
+
+    @Override
+    protected final Map<K, V> delegate() {
+      return delegate;
+    }
   }
 }

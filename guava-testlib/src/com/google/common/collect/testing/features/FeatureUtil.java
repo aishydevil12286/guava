@@ -16,79 +16,100 @@
 
 package com.google.common.collect.testing.features;
 
-import com.google.common.collect.testing.Helpers;
+import static com.google.common.collect.testing.Helpers.copyToSet;
+import static java.util.Collections.disjoint;
+import static java.util.Collections.unmodifiableList;
 
+import com.google.common.annotations.GwtIncompatible;
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
+import com.google.errorprone.annotations.concurrent.GuardedBy;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Method;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
+import org.jspecify.annotations.NullMarked;
 
 /**
  * Utilities for collecting and validating tester requirements from annotations.
  *
  * @author George van den Driessche
  */
-public class FeatureUtil {
-  /**
-   * A cache of annotated objects (typically a Class or Method) to its
-   * set of annotations.
-   */
-  private static Map<AnnotatedElement, Annotation[]> annotationCache =
-      new HashMap<AnnotatedElement, Annotation[]>();
+@GwtIncompatible
+public final class FeatureUtil {
+  /** A cache of annotated objects (typically a Class or Method) to its set of annotations. */
+  @GuardedBy("annotationCache")
+  private static final Map<AnnotatedElement, List<Annotation>> annotationCache = new HashMap<>();
 
-  private static final Map<Class<?>, TesterRequirements>
-      classTesterRequirementsCache =
-          new HashMap<Class<?>, TesterRequirements>();
+  @GuardedBy("classTesterRequirementsCache")
+  private static final Map<Class<?>, TesterRequirements> classTesterRequirementsCache =
+      new HashMap<>();
+
+  @GuardedBy("methodTesterRequirementsCache")
+  private static final Map<Method, TesterRequirements> methodTesterRequirementsCache =
+      new HashMap<>();
 
   /**
-   * Given a set of features, add to it all the features directly or indirectly
-   * implied by any of them, and return it.
+   * Given a set of features, add to it all the features directly or indirectly implied by any of
+   * them, and return it.
+   *
    * @param features the set of features to expand
    * @return the same set of features, expanded with all implied features
    */
+  @CanIgnoreReturnValue
   public static Set<Feature<?>> addImpliedFeatures(Set<Feature<?>> features) {
-    // The base case of the recursion is an empty set of features, which will
-    // occur when the previous set contained only simple features.
-    if (!features.isEmpty()) {
-      features.addAll(impliedFeatures(features));
+    Queue<Feature<?>> queue = new ArrayDeque<>(features);
+    while (!queue.isEmpty()) {
+      Feature<?> feature = queue.remove();
+      for (Feature<?> implied : feature.getImpliedFeatures()) {
+        if (features.add(implied)) {
+          queue.add(implied);
+        }
+      }
     }
     return features;
   }
 
   /**
-   * Given a set of features, return a new set of all features directly or
-   * indirectly implied by any of them.
+   * Given a set of features, return a new set of all features directly or indirectly implied by any
+   * of them.
+   *
    * @param features the set of features whose implications to find
    * @return the implied set of features
    */
   public static Set<Feature<?>> impliedFeatures(Set<Feature<?>> features) {
-    Set<Feature<?>> implied = new LinkedHashSet<Feature<?>>();
-    for (Feature<?> feature : features) {
-      implied.addAll(feature.getImpliedFeatures());
+    Set<Feature<?>> impliedSet = new LinkedHashSet<>();
+    Queue<Feature<?>> queue = new ArrayDeque<>(features);
+    while (!queue.isEmpty()) {
+      Feature<?> feature = queue.remove();
+      for (Feature<?> implied : feature.getImpliedFeatures()) {
+        if (!features.contains(implied) && impliedSet.add(implied)) {
+          queue.add(implied);
+        }
+      }
     }
-    addImpliedFeatures(implied);
-    return implied;
+    return impliedSet;
   }
 
   /**
    * Get the full set of requirements for a tester class.
+   *
    * @param testerClass a tester class
-   * @return all the constraints implicitly or explicitly required by the class
-   * or any of its superclasses.
-   * @throws ConflictingRequirementsException if the requirements are mutually
-   * inconsistent.
+   * @return all the constraints implicitly or explicitly required by the class or any of its
+   *     superclasses.
+   * @throws ConflictingRequirementsException if the requirements are mutually inconsistent.
    */
   public static TesterRequirements getTesterRequirements(Class<?> testerClass)
       throws ConflictingRequirementsException {
     synchronized (classTesterRequirementsCache) {
-      TesterRequirements requirements =
-          classTesterRequirementsCache.get(testerClass);
+      TesterRequirements requirements = classTesterRequirementsCache.get(testerClass);
       if (requirements == null) {
         requirements = buildTesterRequirements(testerClass);
         classTesterRequirementsCache.put(testerClass, requirements);
@@ -99,79 +120,109 @@ public class FeatureUtil {
 
   /**
    * Get the full set of requirements for a tester class.
+   *
    * @param testerMethod a test method of a tester class
-   * @return all the constraints implicitly or explicitly required by the
-   * method, its declaring class, or any of its superclasses.
-   * @throws ConflictingRequirementsException if the requirements are
-   * mutually inconsistent.
+   * @return all the constraints implicitly or explicitly required by the method, its declaring
+   *     class, or any of its superclasses.
+   * @throws ConflictingRequirementsException if the requirements are mutually inconsistent.
    */
   public static TesterRequirements getTesterRequirements(Method testerMethod)
       throws ConflictingRequirementsException {
-    return buildTesterRequirements(testerMethod);
+    synchronized (methodTesterRequirementsCache) {
+      TesterRequirements requirements = methodTesterRequirementsCache.get(testerMethod);
+      if (requirements == null) {
+        requirements = buildTesterRequirements(testerMethod);
+        methodTesterRequirementsCache.put(testerMethod, requirements);
+      }
+      return requirements;
+    }
   }
 
   /**
    * Construct the full set of requirements for a tester class.
+   *
    * @param testerClass a tester class
-   * @return all the constraints implicitly or explicitly required by the class
-   * or any of its superclasses.
-   * @throws ConflictingRequirementsException if the requirements are mutually
-   * inconsistent.
+   * @return all the constraints implicitly or explicitly required by the class or any of its
+   *     superclasses.
+   * @throws ConflictingRequirementsException if the requirements are mutually inconsistent.
    */
   static TesterRequirements buildTesterRequirements(Class<?> testerClass)
       throws ConflictingRequirementsException {
-    final TesterRequirements declaredRequirements =
-        buildDeclaredTesterRequirements(testerClass);
+    TesterRequirements declaredRequirements = buildDeclaredTesterRequirements(testerClass);
     Class<?> baseClass = testerClass.getSuperclass();
     if (baseClass == null) {
       return declaredRequirements;
     } else {
-      final TesterRequirements clonedBaseRequirements =
+      TesterRequirements clonedBaseRequirements =
           new TesterRequirements(getTesterRequirements(baseClass));
-      return incorporateRequirements(
-          clonedBaseRequirements, declaredRequirements, testerClass);
+      return incorporateRequirements(clonedBaseRequirements, declaredRequirements, testerClass);
     }
   }
 
   /**
    * Construct the full set of requirements for a tester method.
+   *
    * @param testerMethod a test method of a tester class
-   * @return all the constraints implicitly or explicitly required by the
-   * method, its declaring class, or any of its superclasses.
-   * @throws ConflictingRequirementsException if the requirements are mutually
-   * inconsistent.
+   * @return all the constraints implicitly or explicitly required by the method, its declaring
+   *     class, or any of its superclasses.
+   * @throws ConflictingRequirementsException if the requirements are mutually inconsistent.
    */
   static TesterRequirements buildTesterRequirements(Method testerMethod)
       throws ConflictingRequirementsException {
-    TesterRequirements clonedClassRequirements = new TesterRequirements(
-        getTesterRequirements(testerMethod.getDeclaringClass()));
-    TesterRequirements declaredRequirements =
-        buildDeclaredTesterRequirements(testerMethod);
-    return incorporateRequirements(
-        clonedClassRequirements, declaredRequirements, testerMethod);
+    TesterRequirements clonedClassRequirements =
+        new TesterRequirements(getTesterRequirements(testerMethod.getDeclaringClass()));
+    TesterRequirements declaredRequirements = buildDeclaredTesterRequirements(testerMethod);
+    return incorporateRequirements(clonedClassRequirements, declaredRequirements, testerMethod);
   }
 
   /**
-   * Construct the set of requirements specified by annotations
-   * directly on a tester class or method.
-   * @param classOrMethod a tester class or a test method thereof
-   * @return all the constraints implicitly or explicitly required by
-   *         annotations on the class or method.
-   * @throws ConflictingRequirementsException if the requirements are mutually
-   *         inconsistent.
+   * Find all the constraints explicitly or implicitly specified by a single tester annotation.
+   *
+   * @param testerAnnotation a tester annotation
+   * @return the requirements specified by the annotation
+   * @throws ConflictingRequirementsException if the requirements are mutually inconsistent.
    */
-  public static TesterRequirements buildDeclaredTesterRequirements(
-      AnnotatedElement classOrMethod)
+  private static TesterRequirements buildTesterRequirements(Annotation testerAnnotation)
+      throws ConflictingRequirementsException {
+    Class<? extends Annotation> annotationClass = testerAnnotation.annotationType();
+    Feature<?>[] presentFeatures;
+    Feature<?>[] absentFeatures;
+    try {
+      presentFeatures = (Feature<?>[]) annotationClass.getMethod("value").invoke(testerAnnotation);
+      absentFeatures = (Feature<?>[]) annotationClass.getMethod("absent").invoke(testerAnnotation);
+    } catch (Exception e) {
+      throw new IllegalArgumentException("Error extracting features from tester annotation.", e);
+    }
+    Set<Feature<?>> allPresentFeatures = addImpliedFeatures(copyToSet(presentFeatures));
+    Set<Feature<?>> allAbsentFeatures = copyToSet(absentFeatures);
+    if (!disjoint(allPresentFeatures, allAbsentFeatures)) {
+      throw new ConflictingRequirementsException(
+          "Annotation explicitly or "
+              + "implicitly requires one or more features to be both present "
+              + "and absent.",
+          intersection(allPresentFeatures, allAbsentFeatures),
+          testerAnnotation);
+    }
+    return new TesterRequirements(allPresentFeatures, allAbsentFeatures);
+  }
+
+  /**
+   * Construct the set of requirements specified by annotations directly on a tester class or
+   * method.
+   *
+   * @param classOrMethod a tester class or a test method thereof
+   * @return all the constraints implicitly or explicitly required by annotations on the class or
+   *     method.
+   * @throws ConflictingRequirementsException if the requirements are mutually inconsistent.
+   */
+  public static TesterRequirements buildDeclaredTesterRequirements(AnnotatedElement classOrMethod)
       throws ConflictingRequirementsException {
     TesterRequirements requirements = new TesterRequirements();
 
-    Iterable<Annotation> testerAnnotations =
-        getTesterAnnotations(classOrMethod);
+    Iterable<Annotation> testerAnnotations = getTesterAnnotations(classOrMethod);
     for (Annotation testerAnnotation : testerAnnotations) {
-      TesterRequirements moreRequirements =
-          buildTesterRequirements(testerAnnotation);
-      incorporateRequirements(
-          requirements, moreRequirements, testerAnnotation);
+      TesterRequirements moreRequirements = buildTesterRequirements(testerAnnotation);
+      incorporateRequirements(requirements, moreRequirements, testerAnnotation);
     }
 
     return requirements;
@@ -179,93 +230,52 @@ public class FeatureUtil {
 
   /**
    * Find all the tester annotations declared on a tester class or method.
+   *
    * @param classOrMethod a class or method whose tester annotations to find
    * @return an iterable sequence of tester annotations on the class
    */
-  public static Iterable<Annotation> getTesterAnnotations(
-      AnnotatedElement classOrMethod) {
-    List<Annotation> result = new ArrayList<Annotation>();
-
-    Annotation[] annotations;
+  public static Iterable<Annotation> getTesterAnnotations(AnnotatedElement classOrMethod) {
     synchronized (annotationCache) {
-      annotations = annotationCache.get(classOrMethod);
+      List<Annotation> annotations = annotationCache.get(classOrMethod);
       if (annotations == null) {
-        annotations = classOrMethod.getDeclaredAnnotations();
+        annotations = new ArrayList<>();
+        for (Annotation a : classOrMethod.getDeclaredAnnotations()) {
+          /*
+           * We avoid reflecting on NullMarked because its @Target(..., MODULE) causes problems
+           * under JDK 8.
+           */
+          if (!(a instanceof NullMarked)
+              && a.annotationType().isAnnotationPresent(TesterAnnotation.class)) {
+            annotations.add(a);
+          }
+        }
+        annotations = unmodifiableList(annotations);
         annotationCache.put(classOrMethod, annotations);
       }
+      return annotations;
     }
-
-    for (Annotation a : annotations) {
-      Class<? extends Annotation> annotationClass = a.annotationType();
-      if (annotationClass.isAnnotationPresent(TesterAnnotation.class)) {
-        result.add(a);
-      }
-    }
-    return result;
-  }
-
-  /**
-   * Find all the constraints explicitly or implicitly specified by a single
-   * tester annotation.
-   * @param testerAnnotation a tester annotation
-   * @return the requirements specified by the annotation
-   * @throws ConflictingRequirementsException if the requirements are mutually
-   *         inconsistent.
-   */
-  private static TesterRequirements buildTesterRequirements(
-      Annotation testerAnnotation)
-      throws ConflictingRequirementsException {
-    Class<? extends Annotation> annotationClass = testerAnnotation.annotationType();
-    final Feature<?>[] presentFeatures;
-    final Feature<?>[] absentFeatures;
-    try {
-      presentFeatures = (Feature[]) annotationClass.getMethod("value")
-          .invoke(testerAnnotation);
-      absentFeatures = (Feature[]) annotationClass.getMethod("absent")
-          .invoke(testerAnnotation);
-    } catch (Exception e) {
-      throw new IllegalArgumentException(
-          "Error extracting features from tester annotation.", e);
-    }
-    Set<Feature<?>> allPresentFeatures =
-        addImpliedFeatures(Helpers.<Feature<?>>copyToSet(presentFeatures));
-    Set<Feature<?>> allAbsentFeatures =
-        addImpliedFeatures(Helpers.<Feature<?>>copyToSet(absentFeatures));
-    Set<Feature<?>> conflictingFeatures =
-        intersection(allPresentFeatures, allAbsentFeatures);
-    if (!conflictingFeatures.isEmpty()) {
-      throw new ConflictingRequirementsException("Annotation explicitly or "
-          + "implicitly requires one or more features to be both present "
-          + "and absent.",
-          conflictingFeatures, testerAnnotation);
-    }
-    return new TesterRequirements(allPresentFeatures, allAbsentFeatures);
   }
 
   /**
    * Incorporate additional requirements into an existing requirements object.
+   *
    * @param requirements the existing requirements object
    * @param moreRequirements more requirements to incorporate
-   * @param source the source of the additional requirements
-   *        (used only for error reporting)
-   * @return the existing requirements object, modified to include the
-   *         additional requirements
-   * @throws ConflictingRequirementsException if the additional requirements
-   *         are inconsistent with the existing requirements
+   * @param source the source of the additional requirements (used only for error reporting)
+   * @return the existing requirements object, modified to include the additional requirements
+   * @throws ConflictingRequirementsException if the additional requirements are inconsistent with
+   *     the existing requirements
    */
+  @CanIgnoreReturnValue
   private static TesterRequirements incorporateRequirements(
-      TesterRequirements requirements, TesterRequirements moreRequirements,
-      Object source) throws ConflictingRequirementsException {
+      TesterRequirements requirements, TesterRequirements moreRequirements, Object source)
+      throws ConflictingRequirementsException {
     Set<Feature<?>> presentFeatures = requirements.getPresentFeatures();
     Set<Feature<?>> absentFeatures = requirements.getAbsentFeatures();
     Set<Feature<?>> morePresentFeatures = moreRequirements.getPresentFeatures();
     Set<Feature<?>> moreAbsentFeatures = moreRequirements.getAbsentFeatures();
-    checkConflict(
-        "absent", absentFeatures,
-        "present", morePresentFeatures, source);
-    checkConflict(
-        "present", presentFeatures,
-        "absent", moreAbsentFeatures, source);
+    checkConflict("absent", absentFeatures, "present", morePresentFeatures, source);
+    checkConflict("present", presentFeatures, "absent", moreAbsentFeatures, source);
     presentFeatures.addAll(morePresentFeatures);
     absentFeatures.addAll(moreAbsentFeatures);
     return requirements;
@@ -273,49 +283,36 @@ public class FeatureUtil {
 
   // Used by incorporateRequirements() only
   private static void checkConflict(
-      String earlierRequirement, Set<Feature<?>> earlierFeatures,
-      String newRequirement, Set<Feature<?>> newFeatures,
-      Object source) throws ConflictingRequirementsException {
-    Set<Feature<?>> conflictingFeatures;
-    conflictingFeatures = intersection(newFeatures, earlierFeatures);
-    if (!conflictingFeatures.isEmpty()) {
-      throw new ConflictingRequirementsException(String.format(Locale.ROOT,
-          "Annotation requires to be %s features that earlier "
-          + "annotations required to be %s.",
-              newRequirement, earlierRequirement),
-          conflictingFeatures, source);
+      String earlierRequirement,
+      Set<Feature<?>> earlierFeatures,
+      String newRequirement,
+      Set<Feature<?>> newFeatures,
+      Object source)
+      throws ConflictingRequirementsException {
+    if (!disjoint(newFeatures, earlierFeatures)) {
+      throw new ConflictingRequirementsException(
+          String.format(
+              Locale.ROOT,
+              "Annotation requires to be %s features that earlier "
+                  + "annotations required to be %s.",
+              newRequirement,
+              earlierRequirement),
+          intersection(newFeatures, earlierFeatures),
+          source);
     }
   }
 
   /**
-   * Construct a new {@link java.util.Set} that is the intersection
-   * of the given sets.
+   * Construct a new {@link java.util.Set} that is the intersection of the given sets.
+   *
+   * @deprecated Use {@link com.google.common.collect.Sets#intersection(Set, Set)} instead.
    */
-  // Calls generic varargs method.
-  @SuppressWarnings("unchecked")
-  public static <T> Set<T> intersection(
-      Set<? extends T> set1, Set<? extends T> set2) {
-    return intersection(new Set[] {set1, set2});
+  @Deprecated
+  public static <T> Set<T> intersection(Set<? extends T> set1, Set<? extends T> set2) {
+    Set<T> result = copyToSet(set1);
+    result.retainAll(set2);
+    return result;
   }
 
-  /**
-   * Construct a new {@link java.util.Set} that is the intersection
-   * of all the given sets.
-   * @param sets the sets to intersect
-   * @return the intersection of the sets
-   * @throws java.lang.IllegalArgumentException if there are no sets to
-   *         intersect
-   */
-  public static <T> Set<T> intersection(Set<? extends T> ... sets) {
-    if (sets.length == 0) {
-      throw new IllegalArgumentException(
-          "Can't intersect no sets; would have to return the universe.");
-    }
-    Set<T> results = Helpers.copyToSet(sets[0]);
-    for (int i = 1; i < sets.length; i++) {
-      Set<? extends T> set = sets[i];
-      results.retainAll(set);
-    }
-    return results;
-  }
+  private FeatureUtil() {}
 }

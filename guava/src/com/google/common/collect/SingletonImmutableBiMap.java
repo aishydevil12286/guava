@@ -16,11 +16,15 @@
 
 package com.google.common.collect;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.collect.CollectPreconditions.checkEntryNotNull;
+import static com.google.common.collect.Maps.immutableEntry;
 
 import com.google.common.annotations.GwtCompatible;
-
-import javax.annotation.Nullable;
+import com.google.common.annotations.GwtIncompatible;
+import com.google.common.annotations.J2ktIncompatible;
+import java.util.function.BiConsumer;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Implementation of {@link ImmutableMap} with exactly one entry.
@@ -28,7 +32,7 @@ import javax.annotation.Nullable;
  * @author Jesse Wilson
  * @author Kevin Bourrillion
  */
-@GwtCompatible(serializable = true, emulated = true)
+@GwtCompatible
 @SuppressWarnings("serial") // uses writeReplace(), not default serialization
 final class SingletonImmutableBiMap<K, V> extends ImmutableBiMap<K, V> {
 
@@ -41,14 +45,15 @@ final class SingletonImmutableBiMap<K, V> extends ImmutableBiMap<K, V> {
     this.singleValue = singleValue;
   }
 
-  private SingletonImmutableBiMap(K singleKey, V singleValue,
-      ImmutableBiMap<V, K> inverse) {
+  /** Private constructor that skips the nullness check. */
+  // TODO(cpovirk): Justify its existence, or delete it.
+  private SingletonImmutableBiMap(K singleKey, V singleValue, @Nullable Void unused) {
     this.singleKey = singleKey;
     this.singleValue = singleValue;
-    this.inverse = inverse;
   }
 
-  @Override public V get(@Nullable Object key) {
+  @Override
+  public @Nullable V get(@Nullable Object key) {
     return singleKey.equals(key) ? singleValue : null;
   }
 
@@ -57,39 +62,47 @@ final class SingletonImmutableBiMap<K, V> extends ImmutableBiMap<K, V> {
     return 1;
   }
 
-  @Override public boolean containsKey(@Nullable Object key) {
+  @Override
+  public void forEach(BiConsumer<? super K, ? super V> action) {
+    checkNotNull(action).accept(singleKey, singleValue);
+  }
+
+  @Override
+  public boolean containsKey(@Nullable Object key) {
     return singleKey.equals(key);
   }
 
-  @Override public boolean containsValue(@Nullable Object value) {
+  @Override
+  public boolean containsValue(@Nullable Object value) {
     return singleValue.equals(value);
   }
 
-  @Override boolean isPartialView() {
+  @Override
+  boolean isPartialView() {
     return false;
   }
 
   @Override
-  ImmutableSet<Entry<K, V>> createEntrySet() {
-    return ImmutableSet.of(Maps.immutableEntry(singleKey, singleValue));
+  public ImmutableSet<Entry<K, V>> entrySet() {
+    return ImmutableSet.of(immutableEntry(singleKey, singleValue));
   }
 
   @Override
-  ImmutableSet<K> createKeySet() {
+  public ImmutableSet<K> keySet() {
     return ImmutableSet.of(singleKey);
   }
 
-  transient ImmutableBiMap<V, K> inverse;
-
   @Override
   public ImmutableBiMap<V, K> inverse() {
-    // racy single-check idiom
-    ImmutableBiMap<V, K> result = inverse;
-    if (result == null) {
-      return inverse = new SingletonImmutableBiMap<V, K>(
-          singleValue, singleKey, this);
-    } else {
-      return result;
-    }
+    return new SingletonImmutableBiMap<>(singleValue, singleKey, null);
+  }
+
+  // redeclare to help optimizers with b/310253115
+  @SuppressWarnings("RedundantOverride")
+  @Override
+  @J2ktIncompatible
+  @GwtIncompatible
+    Object writeReplace() {
+    return super.writeReplace();
   }
 }

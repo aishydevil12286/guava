@@ -16,9 +16,12 @@
 
 package com.google.common.collect;
 
-import com.google.common.annotations.GwtCompatible;
+import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertThrows;
 
+import com.google.common.annotations.GwtCompatible;
 import junit.framework.TestCase;
+import org.jspecify.annotations.NullMarked;
 
 /**
  * Tests {@link ImmutableTable}
@@ -26,62 +29,40 @@ import junit.framework.TestCase;
  * @author Gregory Kick
  */
 @GwtCompatible
+@NullMarked
 public abstract class AbstractImmutableTableTest extends TestCase {
 
-  abstract Iterable<ImmutableTable<Character, Integer, String>>
-      getTestInstances();
+  abstract Iterable<ImmutableTable<Character, Integer, String>> getTestInstances();
 
-  @SuppressWarnings("deprecation")
   public final void testClear() {
-    for (ImmutableTable<Character, Integer, String> testInstance : getTestInstances()) {
-      try {
-        testInstance.clear();
-        fail();
-      } catch (UnsupportedOperationException e) {
-        // success
-      }
+    for (Table<Character, Integer, String> testInstance : getTestInstances()) {
+      assertThrows(UnsupportedOperationException.class, () -> testInstance.clear());
     }
   }
 
-  @SuppressWarnings("deprecation")
   public final void testPut() {
-    for (ImmutableTable<Character, Integer, String> testInstance : getTestInstances()) {
-      try {
-        testInstance.put('a', 1, "blah");
-        fail();
-      } catch (UnsupportedOperationException e) {
-        // success
-      }
+    for (Table<Character, Integer, String> testInstance : getTestInstances()) {
+      assertThrows(UnsupportedOperationException.class, () -> testInstance.put('a', 1, "blah"));
     }
   }
 
-  @SuppressWarnings("deprecation")
   public final void testPutAll() {
-    for (ImmutableTable<Character, Integer, String> testInstance : getTestInstances()) {
-      try {
-        testInstance.putAll(ImmutableTable.of('a', 1, "blah"));
-        fail();
-      } catch (UnsupportedOperationException e) {
-        // success
-      }
+    for (Table<Character, Integer, String> testInstance : getTestInstances()) {
+      assertThrows(
+          UnsupportedOperationException.class,
+          () -> testInstance.putAll(ImmutableTable.of('a', 1, "blah")));
     }
   }
 
-  @SuppressWarnings("deprecation")
   public final void testRemove() {
-    for (ImmutableTable<Character, Integer, String> testInstance : getTestInstances()) {
-      try {
-        testInstance.remove('a', 1);
-        fail();
-      } catch (UnsupportedOperationException e) {
-        // success
-      }
+    for (Table<Character, Integer, String> testInstance : getTestInstances()) {
+      assertThrows(UnsupportedOperationException.class, () -> testInstance.remove('a', 1));
     }
   }
 
   public final void testConsistentToString() {
     for (ImmutableTable<Character, Integer, String> testInstance : getTestInstances()) {
-      assertEquals(testInstance.rowMap().toString(), testInstance.toString());
+      assertThat(testInstance.toString()).isEqualTo(testInstance.rowMap().toString());
     }
   }
 

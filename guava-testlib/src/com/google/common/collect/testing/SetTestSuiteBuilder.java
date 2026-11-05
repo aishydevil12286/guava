@@ -16,7 +16,12 @@
 
 package com.google.common.collect.testing;
 
-import com.google.common.collect.testing.features.CollectionFeature;
+import static com.google.common.collect.testing.Helpers.copyToList;
+import static com.google.common.collect.testing.features.CollectionFeature.SERIALIZABLE;
+import static com.google.common.collect.testing.features.CollectionFeature.SERIALIZABLE_INCLUDING_VIEWS;
+import static com.google.common.testing.SerializableTester.reserialize;
+
+import com.google.common.annotations.GwtIncompatible;
 import com.google.common.collect.testing.features.Feature;
 import com.google.common.collect.testing.testers.CollectionSerializationEqualTester;
 import com.google.common.collect.testing.testers.SetAddAllTester;
@@ -25,33 +30,30 @@ import com.google.common.collect.testing.testers.SetCreationTester;
 import com.google.common.collect.testing.testers.SetEqualsTester;
 import com.google.common.collect.testing.testers.SetHashCodeTester;
 import com.google.common.collect.testing.testers.SetRemoveTester;
-import com.google.common.testing.SerializableTester;
-
-import junit.framework.TestSuite;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import junit.framework.TestSuite;
 
 /**
- * Creates, based on your criteria, a JUnit test suite that exhaustively tests
- * a Set implementation.
+ * Creates, based on your criteria, a JUnit test suite that exhaustively tests a Set implementation.
  *
  * @author George van den Driessche
  */
+@GwtIncompatible
 public class SetTestSuiteBuilder<E>
     extends AbstractCollectionTestSuiteBuilder<SetTestSuiteBuilder<E>, E> {
-  public static <E> SetTestSuiteBuilder<E> using(
-      TestSetGenerator<E> generator) {
+  public static <E> SetTestSuiteBuilder<E> using(TestSetGenerator<E> generator) {
     return new SetTestSuiteBuilder<E>().usingGenerator(generator);
   }
 
-  @Override protected List<Class<? extends AbstractTester>> getTesters() {
-    List<Class<? extends AbstractTester>> testers
-        = Helpers.copyToList(super.getTesters());
-    
+  @SuppressWarnings("rawtypes") // class literals
+  @Override
+  protected List<Class<? extends AbstractTester>> getTesters() {
+    List<Class<? extends AbstractTester>> testers = copyToList(super.getTesters());
+
     testers.add(CollectionSerializationEqualTester.class);
     testers.add(SetAddAllTester.class);
     testers.add(SetAddTester.class);
@@ -66,26 +68,25 @@ public class SetTestSuiteBuilder<E>
   }
 
   @Override
-  protected
-      List<TestSuite>
-      createDerivedSuites(
-          FeatureSpecificTestSuiteBuilder<
-              ?, ? extends OneSizeTestContainerGenerator<Collection<E>, E>> parentBuilder) {
-    List<TestSuite> derivedSuites = new ArrayList<TestSuite>(
-        super.createDerivedSuites(parentBuilder));
+  protected List<TestSuite> createDerivedSuites(
+      FeatureSpecificTestSuiteBuilder<?, ? extends OneSizeTestContainerGenerator<Collection<E>, E>>
+          parentBuilder) {
+    List<TestSuite> derivedSuites = new ArrayList<>(super.createDerivedSuites(parentBuilder));
 
-    if (parentBuilder.getFeatures().contains(CollectionFeature.SERIALIZABLE)) {
-      derivedSuites.add(SetTestSuiteBuilder
-          .using(new ReserializedSetGenerator<E>(parentBuilder.getSubjectGenerator()))
-          .named(getName() + " reserialized")
-          .withFeatures(computeReserializedCollectionFeatures(parentBuilder.getFeatures()))
-          .suppressing(parentBuilder.getSuppressedTests())
-          .createTestSuite());
+    if (parentBuilder.getFeatures().contains(SERIALIZABLE)) {
+      derivedSuites.add(
+          using(new ReserializedSetGenerator<E>(parentBuilder.getSubjectGenerator()))
+              .named(getName() + " reserialized")
+              .withFeatures(computeReserializedCollectionFeatures(parentBuilder.getFeatures()))
+              .suppressing(parentBuilder.getSuppressedTests())
+              .withSetUp(parentBuilder.getSetUp())
+              .withTearDown(parentBuilder.getTearDown())
+              .createTestSuite());
     }
     return derivedSuites;
   }
-  
-  static class ReserializedSetGenerator<E> implements TestSetGenerator<E>{
+
+  private static final class ReserializedSetGenerator<E> implements TestSetGenerator<E> {
     final OneSizeTestContainerGenerator<Collection<E>, E> gen;
 
     private ReserializedSetGenerator(OneSizeTestContainerGenerator<Collection<E>, E> gen) {
@@ -99,7 +100,7 @@ public class SetTestSuiteBuilder<E>
 
     @Override
     public Set<E> create(Object... elements) {
-      return (Set<E>) SerializableTester.reserialize(gen.create(elements));
+      return (Set<E>) reserialize(gen.create(elements));
     }
 
     @Override
@@ -112,13 +113,11 @@ public class SetTestSuiteBuilder<E>
       return gen.order(insertionOrder);
     }
   }
-  
-  private static Set<Feature<?>> computeReserializedCollectionFeatures(
-      Set<Feature<?>> features) {
-    Set<Feature<?>> derivedFeatures = new HashSet<Feature<?>>();
-    derivedFeatures.addAll(features);
-    derivedFeatures.remove(CollectionFeature.SERIALIZABLE);
-    derivedFeatures.remove(CollectionFeature.SERIALIZABLE_INCLUDING_VIEWS);
+
+  private static Set<Feature<?>> computeReserializedCollectionFeatures(Set<Feature<?>> features) {
+    Set<Feature<?>> derivedFeatures = new HashSet<>(features);
+    derivedFeatures.remove(SERIALIZABLE);
+    derivedFeatures.remove(SERIALIZABLE_INCLUDING_VIEWS);
     return derivedFeatures;
   }
 }

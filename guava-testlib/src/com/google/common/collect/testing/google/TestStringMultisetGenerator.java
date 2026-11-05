@@ -20,8 +20,8 @@ import com.google.common.annotations.GwtCompatible;
 import com.google.common.collect.Multiset;
 import com.google.common.collect.testing.SampleElements;
 import com.google.common.collect.testing.SampleElements.Strings;
-
 import java.util.List;
+import org.jspecify.annotations.NullMarked;
 
 /**
  * Create multisets of strings for tests.
@@ -29,9 +29,8 @@ import java.util.List;
  * @author Jared Levy
  */
 @GwtCompatible
-public abstract class TestStringMultisetGenerator
-    implements TestMultisetGenerator<String>
-{
+@NullMarked
+public abstract class TestStringMultisetGenerator implements TestMultisetGenerator<String> {
   @Override
   public SampleElements<String> samples() {
     return new Strings();

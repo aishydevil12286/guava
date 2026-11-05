@@ -16,19 +16,23 @@
 
 package com.google.common.util.concurrent;
 
+import static com.google.common.truth.Truth.assertThat;
+
+import com.google.common.annotations.GwtIncompatible;
 import com.google.common.collect.ImmutableList;
-
-import junit.framework.TestCase;
-
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
+import junit.framework.TestCase;
+import org.jspecify.annotations.NullUnmarked;
 
 /**
  * Tests for {@link AbstractListeningExecutorService}.
  *
  * @author Colin Decker
  */
+@NullUnmarked
+@GwtIncompatible
 public class AbstractListeningExecutorServiceTest extends TestCase {
 
   public void testSubmit() throws Exception {
@@ -41,18 +45,18 @@ public class AbstractListeningExecutorServiceTest extends TestCase {
 
     TestRunnable runnable = new TestRunnable();
     ListenableFuture<?> runnableFuture = e.submit(runnable);
-    assertTrue(runnableFuture instanceof TrustedListenableFutureTask);
+    assertThat(runnableFuture).isInstanceOf(TrustedListenableFutureTask.class);
     assertTrue(runnableFuture.isDone());
     assertTrue(runnable.run);
 
     ListenableFuture<String> callableFuture = e.submit(new TestCallable());
-    assertTrue(callableFuture instanceof TrustedListenableFutureTask);
+    assertThat(callableFuture).isInstanceOf(TrustedListenableFutureTask.class);
     assertTrue(callableFuture.isDone());
-    assertEquals("foo", callableFuture.get());
+    assertThat(callableFuture.get()).isEqualTo("foo");
 
     TestRunnable runnable2 = new TestRunnable();
     ListenableFuture<Integer> runnableFuture2 = e.submit(runnable2, 3);
-    assertTrue(runnableFuture2 instanceof TrustedListenableFutureTask);
+    assertThat(runnableFuture2).isInstanceOf(TrustedListenableFutureTask.class);
     assertTrue(runnableFuture2.isDone());
     assertTrue(runnable2.run);
     assertEquals((Integer) 3, runnableFuture2.get());
@@ -74,20 +78,17 @@ public class AbstractListeningExecutorServiceTest extends TestCase {
     }
   }
 
-  /**
-   * Simple same thread listening executor service that doesn't handle shutdown.
-   */
+  /** Simple same thread listening executor service that doesn't handle shutdown. */
   private static class TestListeningExecutorService extends AbstractListeningExecutorService {
 
     @Override
     public void execute(Runnable runnable) {
-      assertTrue(runnable instanceof TrustedListenableFutureTask);
+      assertThat(runnable).isInstanceOf(TrustedListenableFutureTask.class);
       runnable.run();
     }
 
     @Override
-    public void shutdown() {
-    }
+    public void shutdown() {}
 
     @Override
     public List<Runnable> shutdownNow() {

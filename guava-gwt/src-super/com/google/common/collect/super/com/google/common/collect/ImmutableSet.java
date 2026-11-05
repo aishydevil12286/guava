@@ -18,36 +18,44 @@ package com.google.common.collect;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
+import com.google.errorprone.annotations.concurrent.LazyInit;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collector;
+import jsinterop.annotations.JsMethod;
+import org.jspecify.annotations.Nullable;
 
 /**
- * GWT emulated version of {@link ImmutableSet}.  For the unsorted sets, they
- * are thin wrapper around {@link java.util.Collections#emptySet()}, {@link
- * Collections#singleton(Object)} and {@link java.util.LinkedHashSet} for
- * empty, singleton and regular sets respectively.  For the sorted sets, it's
- * a thin wrapper around {@link java.util.TreeSet}.
+ * GWT emulated version of {@link com.google.common.collect.ImmutableSet}. For the unsorted sets,
+ * they are thin wrapper around {@link java.util.Collections#emptySet()}, {@link
+ * Collections#singleton(Object)} and {@link java.util.LinkedHashSet} for empty, singleton and
+ * regular sets respectively. For the sorted sets, it's a thin wrapper around {@link
+ * java.util.TreeSet}.
  *
  * @see ImmutableSortedSet
- *
  * @author Hayward Chan
  */
-@SuppressWarnings("serial")  // Serialization only done in GWT.
+@SuppressWarnings("serial") // Serialization only done in GWT.
 public abstract class ImmutableSet<E> extends ImmutableCollection<E> implements Set<E> {
   ImmutableSet() {}
+
+  public static <E> Collector<E, ?, ImmutableSet<E>> toImmutableSet() {
+    return CollectCollectors.toImmutableSet();
+  }
 
   // Casting to any type is safe because the set will never hold any elements.
   @SuppressWarnings({"unchecked"})
   public static <E> ImmutableSet<E> of() {
-    return (ImmutableSet<E>) EmptyImmutableSet.INSTANCE;
+    return (ImmutableSet<E>) RegularImmutableSet.EMPTY;
   }
 
-  public static <E> ImmutableSet<E> of(E element) {
-    return new SingletonImmutableSet<E>(element);
+  public static <E> ImmutableSet<E> of(E e1) {
+    return new SingletonImmutableSet<E>(e1);
   }
 
   @SuppressWarnings("unchecked")
@@ -79,6 +87,13 @@ public abstract class ImmutableSet<E> extends ImmutableCollection<E> implements 
     return copyOf(all.iterator());
   }
 
+  /** ImmutableSet.of API that is friendly to use from JavaScript. */
+  @JsMethod(name = "of")
+  static <E> ImmutableSet<E> jsOf(E... elements) {
+    return copyOf(elements);
+  }
+
+  @JsMethod
   public static <E> ImmutableSet<E> copyOf(E[] elements) {
     checkNotNull(elements);
     switch (elements.length) {
@@ -111,8 +126,7 @@ public abstract class ImmutableSet<E> extends ImmutableCollection<E> implements 
     }
     E first = elements.next();
     if (!elements.hasNext()) {
-      // TODO: Remove "ImmutableSet.<E>" when eclipse bug is fixed.
-      return ImmutableSet.<E>of(first);
+      return of(first);
     }
 
     Set<E> delegate = Sets.newLinkedHashSet();
@@ -155,16 +169,46 @@ public abstract class ImmutableSet<E> extends ImmutableCollection<E> implements 
     }
   }
 
-  @Override public boolean equals(Object obj) {
+  @Override
+  public boolean equals(@Nullable Object obj) {
     return Sets.equalsImpl(this, obj);
   }
 
-  @Override public int hashCode() {
+  @Override
+  public int hashCode() {
     return Sets.hashCodeImpl(this);
+  }
+
+  // This declaration is needed to make Set.iterator() and
+  // ImmutableCollection.iterator() appear consistent to javac's type inference.
+  @Override
+  public abstract UnmodifiableIterator<E> iterator();
+
+  abstract static class CachingAsList<E> extends ImmutableSet<E> {
+    @LazyInit private transient ImmutableList<E> asList;
+
+    @Override
+    public ImmutableList<E> asList() {
+      ImmutableList<E> result = asList;
+      if (result == null) {
+        return asList = createAsList();
+      } else {
+        return result;
+      }
+    }
+
+    @Override
+    ImmutableList<E> createAsList() {
+      return new RegularImmutableAsList<E>(this, toArray());
+    }
   }
 
   public static <E> Builder<E> builder() {
     return new Builder<E>();
+  }
+
+  public static <E> Builder<E> builderWithExpectedSize(int size) {
+    return new Builder<E>(size);
   }
 
   public static class Builder<E> extends ImmutableCollection.Builder<E> {
@@ -174,24 +218,30 @@ public abstract class ImmutableSet<E> extends ImmutableCollection<E> implements 
     public Builder() {
       this.contents = Lists.newArrayList();
     }
-    
+
     Builder(int initialCapacity) {
       this.contents = Lists.newArrayListWithCapacity(initialCapacity);
     }
 
-    @Override public Builder<E> add(E element) {
+    @CanIgnoreReturnValue
+    @Override
+    public Builder<E> add(E element) {
       contents.add(checkNotNull(element));
       return this;
     }
 
-    @Override public Builder<E> add(E... elements) {
+    @CanIgnoreReturnValue
+    @Override
+    public Builder<E> add(E... elements) {
       checkNotNull(elements); // for GWT
       contents.ensureCapacity(contents.size() + elements.length);
       super.add(elements);
       return this;
     }
 
-    @Override public Builder<E> addAll(Iterable<? extends E> elements) {
+    @CanIgnoreReturnValue
+    @Override
+    public Builder<E> addAll(Iterable<? extends E> elements) {
       if (elements instanceof Collection) {
         Collection<?> collection = (Collection<?>) elements;
         contents.ensureCapacity(contents.size() + collection.size());
@@ -200,12 +250,21 @@ public abstract class ImmutableSet<E> extends ImmutableCollection<E> implements 
       return this;
     }
 
-    @Override public Builder<E> addAll(Iterator<? extends E> elements) {
+    @CanIgnoreReturnValue
+    @Override
+    public Builder<E> addAll(Iterator<? extends E> elements) {
       super.addAll(elements);
       return this;
     }
 
-    @Override public ImmutableSet<E> build() {
+    @CanIgnoreReturnValue
+    Builder<E> combine(Builder<E> builder) {
+      contents.addAll(builder.contents);
+      return this;
+    }
+
+    @Override
+    public ImmutableSet<E> build() {
       return copyOf(contents.iterator());
     }
   }

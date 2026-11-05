@@ -15,14 +15,14 @@
 package com.google.common.hash;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static java.util.Objects.requireNonNull;
 
 import com.google.common.annotations.Beta;
-
+import com.google.common.annotations.J2ktIncompatible;
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-
-import javax.annotation.CheckReturnValue;
 
 /**
  * An {@link InputStream} that maintains a hash of the data read from it.
@@ -30,6 +30,7 @@ import javax.annotation.CheckReturnValue;
  * @author Qian Huang
  * @since 16.0
  */
+@J2ktIncompatible
 @Beta
 public final class HashingInputStream extends FilterInputStream {
   private final Hasher hasher;
@@ -45,13 +46,18 @@ public final class HashingInputStream extends FilterInputStream {
     this.hasher = checkNotNull(hashFunction.newHasher());
   }
 
+  private InputStream in() {
+    return requireNonNull(in); // guaranteed safe by the constructor
+  }
+
   /**
-   * Reads the next byte of data from the underlying input stream and updates the hasher with
-   * the byte read.
+   * Reads the next byte of data from the underlying input stream and updates the hasher with the
+   * byte read.
    */
   @Override
+  @CanIgnoreReturnValue
   public int read() throws IOException {
-    int b = in.read();
+    int b = in().read();
     if (b != -1) {
       hasher.putByte((byte) b);
     }
@@ -63,8 +69,9 @@ public final class HashingInputStream extends FilterInputStream {
    * the bytes read.
    */
   @Override
+  @CanIgnoreReturnValue
   public int read(byte[] bytes, int off, int len) throws IOException {
-    int numOfBytesRead = in.read(bytes, off, len);
+    int numOfBytesRead = in().read(bytes, off, len);
     if (numOfBytesRead != -1) {
       hasher.putBytes(bytes, off, numOfBytesRead);
     }
@@ -73,22 +80,21 @@ public final class HashingInputStream extends FilterInputStream {
 
   /**
    * mark() is not supported for HashingInputStream
+   *
    * @return {@code false} always
    */
   @Override
-  @CheckReturnValue
   public boolean markSupported() {
     return false;
   }
 
-  /**
-   * mark() is not supported for HashingInputStream
-   */
+  /** mark() is not supported for HashingInputStream */
   @Override
   public void mark(int readlimit) {}
 
   /**
    * reset() is not supported for HashingInputStream.
+   *
    * @throws IOException this operation is not supported
    */
   @Override
@@ -97,10 +103,9 @@ public final class HashingInputStream extends FilterInputStream {
   }
 
   /**
-   * Returns the {@link HashCode} based on the data read from this stream. The result is
-   * unspecified if this method is called more than once on the same instance.
+   * Returns the {@link HashCode} based on the data read from this stream. The result is unspecified
+   * if this method is called more than once on the same instance.
    */
-  @CheckReturnValue
   public HashCode hash() {
     return hasher.hash();
   }

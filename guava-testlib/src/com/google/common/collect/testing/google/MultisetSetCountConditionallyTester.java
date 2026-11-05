@@ -20,56 +20,52 @@ import static com.google.common.collect.testing.features.CollectionFeature.SUPPO
 import static com.google.common.collect.testing.features.CollectionSize.SEVERAL;
 import static com.google.common.collect.testing.features.CollectionSize.ZERO;
 import static java.util.Collections.nCopies;
+import static org.junit.Assert.assertThrows;
 
 import com.google.common.annotations.GwtCompatible;
 import com.google.common.collect.testing.features.CollectionFeature;
 import com.google.common.collect.testing.features.CollectionSize;
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
 
 /**
- * A generic JUnit test which tests conditional {@code setCount()} operations on
- * a multiset. Can't be invoked directly; please see
- * {@link MultisetTestSuiteBuilder}.
+ * A generic JUnit test which tests conditional {@code setCount()} operations on a multiset. Can't
+ * be invoked directly; please see {@link MultisetTestSuiteBuilder}.
  *
  * @author Chris Povirk
  */
 @GwtCompatible
-public class MultisetSetCountConditionallyTester<E> extends
-    AbstractMultisetSetCountTester<E> {
-  @Override void setCountCheckReturnValue(E element, int count) {
+public class MultisetSetCountConditionallyTester<E> extends AbstractMultisetSetCountTester<E> {
+  @Override
+  void setCountCheckReturnValue(E element, int count) {
     assertTrue(
         "setCount() with the correct expected present count should return true",
         setCount(element, count));
   }
 
-  @Override void setCountNoCheckReturnValue(E element, int count) {
+  @Override
+  void setCountNoCheckReturnValue(E element, int count) {
     setCount(element, count);
   }
 
+  @CanIgnoreReturnValue
   private boolean setCount(E element, int count) {
     return getMultiset().setCount(element, getMultiset().count(element), count);
-  }
-
-  private void assertSetCountNegativeOldCount() {
-    try {
-      getMultiset().setCount(e3(), -1, 1);
-      fail("calling setCount() with a negative oldCount should throw "
-          + "IllegalArgumentException");
-    } catch (IllegalArgumentException expected) {
-    }
   }
 
   // Negative oldCount.
 
   @CollectionFeature.Require(SUPPORTS_ADD)
   public void testSetCountConditional_negativeOldCount_addSupported() {
-    assertSetCountNegativeOldCount();
+    assertThrows(IllegalArgumentException.class, () -> getMultiset().setCount(e3(), -1, 1));
   }
 
   @CollectionFeature.Require(absent = SUPPORTS_ADD)
   public void testSetCountConditional_negativeOldCount_addUnsupported() {
-    try {
-      assertSetCountNegativeOldCount();
-    } catch (UnsupportedOperationException tolerated) {
+    RuntimeException expected =
+        assertThrows(RuntimeException.class, () -> getMultiset().setCount(e3(), -1, 1));
+    if (!(expected instanceof IllegalArgumentException
+        || expected instanceof UnsupportedOperationException)) {
+      throw expected;
     }
   }
 
@@ -77,7 +73,8 @@ public class MultisetSetCountConditionallyTester<E> extends
 
   @CollectionFeature.Require(SUPPORTS_ADD)
   public void testSetCountConditional_oldCountTooLarge() {
-    assertFalse("setCount() with a too-large oldCount should return false",
+    assertFalse(
+        "setCount() with a too-large oldCount should return false",
         getMultiset().setCount(e0(), 2, 3));
     expectUnchanged();
   }
@@ -85,7 +82,8 @@ public class MultisetSetCountConditionallyTester<E> extends
   @CollectionSize.Require(absent = ZERO)
   @CollectionFeature.Require(SUPPORTS_ADD)
   public void testSetCountConditional_oldCountTooSmallZero() {
-    assertFalse("setCount() with a too-small oldCount should return false",
+    assertFalse(
+        "setCount() with a too-small oldCount should return false",
         getMultiset().setCount(e0(), 0, 2));
     expectUnchanged();
   }
@@ -94,14 +92,14 @@ public class MultisetSetCountConditionallyTester<E> extends
   @CollectionFeature.Require(SUPPORTS_ADD)
   public void testSetCountConditional_oldCountTooSmallNonzero() {
     initThreeCopies();
-    assertFalse("setCount() with a too-small oldCount should return false",
+    assertFalse(
+        "setCount() with a too-small oldCount should return false",
         getMultiset().setCount(e0(), 1, 5));
     expectContents(nCopies(3, e0()));
   }
 
   /*
-   * TODO: test that unmodifiable multisets either throw UOE or return false
-   * when both are valid options. Currently we test the UOE cases and the
-   * return-false cases but not their intersection
+   * TODO: test that unmodifiable multisets either throw UOE or return false when both are valid
+   * options. Currently we test the UOE cases and the return-false cases but not their intersection
    */
 }

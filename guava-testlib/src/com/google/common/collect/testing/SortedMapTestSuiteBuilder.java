@@ -16,51 +16,59 @@
 
 package com.google.common.collect.testing;
 
+import static com.google.common.collect.testing.Helpers.copyToList;
+import static com.google.common.collect.testing.features.CollectionFeature.KNOWN_ORDER;
+import static java.util.Collections.emptySet;
+
+import com.google.common.annotations.GwtIncompatible;
 import com.google.common.collect.testing.DerivedCollectionGenerators.Bound;
 import com.google.common.collect.testing.DerivedCollectionGenerators.SortedMapSubmapTestMapGenerator;
-import com.google.common.collect.testing.features.CollectionFeature;
 import com.google.common.collect.testing.features.Feature;
 import com.google.common.collect.testing.testers.SortedMapNavigationTester;
-
-import junit.framework.TestSuite;
-
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import junit.framework.TestSuite;
+import org.jspecify.annotations.Nullable;
 
 /**
- * Creates, based on your criteria, a JUnit test suite that exhaustively tests
- * a SortedMap implementation.
+ * Creates, based on your criteria, a JUnit test suite that exhaustively tests a SortedMap
+ * implementation.
  */
+@GwtIncompatible
 public class SortedMapTestSuiteBuilder<K, V> extends MapTestSuiteBuilder<K, V> {
   public static <K, V> SortedMapTestSuiteBuilder<K, V> using(
       TestSortedMapGenerator<K, V> generator) {
-    SortedMapTestSuiteBuilder<K, V> result = new SortedMapTestSuiteBuilder<K, V>();
+    SortedMapTestSuiteBuilder<K, V> result = new SortedMapTestSuiteBuilder<>();
     result.usingGenerator(generator);
     return result;
   }
 
-  @Override protected List<Class<? extends AbstractTester>> getTesters() {
-    List<Class<? extends AbstractTester>> testers = Helpers.copyToList(super.getTesters());
+  @SuppressWarnings("rawtypes") // class literals
+  @Override
+  protected List<Class<? extends AbstractTester>> getTesters() {
+    List<Class<? extends AbstractTester>> testers = copyToList(super.getTesters());
     testers.add(SortedMapNavigationTester.class);
     return testers;
   }
 
-  @Override public TestSuite createTestSuite() {
-    if (!getFeatures().contains(CollectionFeature.KNOWN_ORDER)) {
-      List<Feature<?>> features = Helpers.copyToList(getFeatures());
-      features.add(CollectionFeature.KNOWN_ORDER);
+  @Override
+  public TestSuite createTestSuite() {
+    if (!getFeatures().contains(KNOWN_ORDER)) {
+      List<Feature<?>> features = copyToList(getFeatures());
+      features.add(KNOWN_ORDER);
       withFeatures(features);
     }
     return super.createTestSuite();
   }
 
   @Override
-  protected List<TestSuite> createDerivedSuites(FeatureSpecificTestSuiteBuilder<?,
-      ? extends OneSizeTestContainerGenerator<Map<K, V>, Entry<K, V>>> parentBuilder) {
+  protected List<TestSuite> createDerivedSuites(
+      FeatureSpecificTestSuiteBuilder<
+              ?, ? extends OneSizeTestContainerGenerator<Map<K, V>, Entry<K, V>>>
+          parentBuilder) {
     List<TestSuite> derivedSuites = super.createDerivedSuites(parentBuilder);
 
     if (!parentBuilder.getFeatures().contains(NoRecurse.SUBMAP)) {
@@ -72,41 +80,43 @@ public class SortedMapTestSuiteBuilder<K, V> extends MapTestSuiteBuilder<K, V> {
     return derivedSuites;
   }
 
-  @Override protected SetTestSuiteBuilder<K> createDerivedKeySetSuite(
-      TestSetGenerator<K> keySetGenerator) {
+  @Override
+  protected SetTestSuiteBuilder<K> createDerivedKeySetSuite(TestSetGenerator<K> keySetGenerator) {
     return keySetGenerator instanceof TestSortedSetGenerator
         ? SortedSetTestSuiteBuilder.using((TestSortedSetGenerator<K>) keySetGenerator)
         : SetTestSuiteBuilder.using(keySetGenerator);
   }
 
   /**
-   * To avoid infinite recursion, test suites with these marker features won't
-   * have derived suites created for them.
+   * To avoid infinite recursion, test suites with these marker features won't have derived suites
+   * created for them.
    */
-  enum NoRecurse implements Feature<Void> {
+  enum NoRecurse implements Feature<@Nullable Void> {
     SUBMAP,
     DESCENDING;
 
     @Override
-    public Set<Feature<? super Void>> getImpliedFeatures() {
-      return Collections.emptySet();
+    public Set<Feature<? super @Nullable Void>> getImpliedFeatures() {
+      return emptySet();
     }
   }
 
   /**
    * Creates a suite whose map has some elements filtered out of view.
    *
-   * <p>Because the map may be ascending or descending, this test must derive
-   * the relative order of these extreme values rather than relying on their
-   * regular sort ordering.
+   * <p>Because the map may be ascending or descending, this test must derive the relative order of
+   * these extreme values rather than relying on their regular sort ordering.
    */
-  final TestSuite createSubmapSuite(final FeatureSpecificTestSuiteBuilder<?,
-          ? extends OneSizeTestContainerGenerator<Map<K, V>, Entry<K, V>>>
-          parentBuilder, final Bound from, final Bound to) {
-    final TestSortedMapGenerator<K, V> delegate
-        = (TestSortedMapGenerator<K, V>) parentBuilder.getSubjectGenerator().getInnerGenerator();
+  final TestSuite createSubmapSuite(
+      FeatureSpecificTestSuiteBuilder<
+              ?, ? extends OneSizeTestContainerGenerator<Map<K, V>, Entry<K, V>>>
+          parentBuilder,
+      Bound from,
+      Bound to) {
+    TestSortedMapGenerator<K, V> delegate =
+        (TestSortedMapGenerator<K, V>) parentBuilder.getSubjectGenerator().getInnerGenerator();
 
-    List<Feature<?>> features = new ArrayList<Feature<?>>();
+    List<Feature<?>> features = new ArrayList<>();
     features.add(NoRecurse.SUBMAP);
     features.addAll(parentBuilder.getFeatures());
 
@@ -114,6 +124,8 @@ public class SortedMapTestSuiteBuilder<K, V> extends MapTestSuiteBuilder<K, V> {
         .named(parentBuilder.getName() + " subMap " + from + "-" + to)
         .withFeatures(features)
         .suppressing(parentBuilder.getSuppressedTests())
+        .withSetUp(parentBuilder.getSetUp())
+        .withTearDown(parentBuilder.getTearDown())
         .createTestSuite();
   }
 

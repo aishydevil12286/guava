@@ -26,9 +26,8 @@ import com.google.common.collect.testing.features.CollectionFeature;
 import com.google.common.collect.testing.features.CollectionSize;
 
 /**
- * A generic JUnit test which tests {@code peek()} operations on a queue.
- * Can't be invoked directly; please see
- * {@link com.google.common.collect.testing.CollectionTestSuiteBuilder}.
+ * A generic JUnit test which tests {@code peek()} operations on a queue. Can't be invoked directly;
+ * please see {@link com.google.common.collect.testing.CollectionTestSuiteBuilder}.
  *
  * @author Jared Levy
  */
@@ -42,16 +41,14 @@ public class QueuePeekTester<E> extends AbstractQueueTester<E> {
 
   @CollectionSize.Require(ONE)
   public void testPeek_size1() {
-    assertEquals("size1Queue.peek() should return first element",
-        e0(), getQueue().peek());
+    assertEquals("size1Queue.peek() should return first element", e0(), getQueue().peek());
     expectUnchanged();
   }
 
   @CollectionFeature.Require(KNOWN_ORDER)
   @CollectionSize.Require(SEVERAL)
   public void testPeek_sizeMany() {
-    assertEquals("sizeManyQueue.peek() should return first element",
-        e0(), getQueue().peek());
+    assertEquals("sizeManyQueue.peek() should return first element", e0(), getQueue().peek());
     expectUnchanged();
   }
 }

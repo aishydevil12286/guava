@@ -18,29 +18,20 @@ package com.google.common.cache;
 
 import com.google.caliper.BeforeExperiment;
 import com.google.caliper.Benchmark;
-import com.google.common.base.Function;
-import com.google.common.base.Functions;
 import com.google.common.collect.MapMaker;
-
 import java.util.Map;
+import org.jspecify.annotations.NullUnmarked;
 
 /**
  * Compare CacheBuilder and MapMaker performance, ensuring that they remain on par with each other.
  *
  * @author Nikita Sidorov
  */
+@SuppressWarnings("CheckReturnValue")
+@NullUnmarked
 public class MapMakerComparisonBenchmark {
   private static final String TEST_KEY = "test key";
   private static final String TEST_VALUE = "test value";
-
-  private static final Function<Object, Object> IDENTITY = Functions.identity();
-
-  // Loading/computing versions:
-  private final Map<Object, Object> computingMap = new MapMaker().makeComputingMap(IDENTITY);
-  private final LoadingCache<Object, Object> loadingCache =
-      CacheBuilder.newBuilder().recordStats().build(CacheLoader.from(IDENTITY));
-  private final LoadingCache<Object, Object> loadingCacheNoStats =
-      CacheBuilder.newBuilder().build(CacheLoader.from(IDENTITY));
 
   // Non-loading versions:
   private final Map<Object, Object> map = new MapMaker().makeMap(); // Returns ConcurrentHashMap
@@ -54,37 +45,22 @@ public class MapMakerComparisonBenchmark {
     cacheNoStats.put(TEST_KEY, TEST_VALUE);
   }
 
-  @Benchmark void computingMapMaker(int rep) {
-    for (int i = 0; i < rep; i++) {
-      computingMap.get(TEST_KEY);
-    }
-  }
-
-  @Benchmark void loadingCacheBuilder_stats(int rep) {
-    for (int i = 0; i < rep; i++) {
-      loadingCache.getUnchecked(TEST_KEY);
-    }
-  }
-
-  @Benchmark void loadingCacheBuilder(int rep) {
-    for (int i = 0; i < rep; i++) {
-      loadingCacheNoStats.getUnchecked(TEST_KEY);
-    }
-  }
-
-  @Benchmark void concurrentHashMap(int rep) {
+  @Benchmark
+  void concurrentHashMap(int rep) {
     for (int i = 0; i < rep; i++) {
       map.get(TEST_KEY);
     }
   }
 
-  @Benchmark void cacheBuilder_stats(int rep) {
+  @Benchmark
+  void cacheBuilder_stats(int rep) {
     for (int i = 0; i < rep; i++) {
       cache.getIfPresent(TEST_KEY);
     }
   }
 
-  @Benchmark void cacheBuilder(int rep) {
+  @Benchmark
+  void cacheBuilder(int rep) {
     for (int i = 0; i < rep; i++) {
       cacheNoStats.getIfPresent(TEST_KEY);
     }

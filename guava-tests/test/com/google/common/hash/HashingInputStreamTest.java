@@ -14,55 +14,56 @@
 
 package com.google.common.hash;
 
-import static org.easymock.EasyMock.aryEq;
-import static org.easymock.EasyMock.eq;
+import static com.google.common.hash.Hashing.sha512;
+import static java.lang.System.arraycopy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 
+import com.google.common.annotations.J2ktIncompatible;
 import com.google.common.testing.NullPointerTester;
-
-import junit.framework.TestCase;
-
-import org.easymock.EasyMock;
-
 import java.io.ByteArrayInputStream;
 import java.util.Arrays;
+import junit.framework.TestCase;
+import org.jspecify.annotations.NullUnmarked;
 
 /**
  * Tests for {@link HashingInputStream}.
  *
  * @author Qian Huang
  */
+@NullUnmarked
+@J2ktIncompatible
 public class HashingInputStreamTest extends TestCase {
   private Hasher hasher;
   private HashFunction hashFunction;
   private static final byte[] testBytes = new byte[] {'y', 'a', 'm', 's'};
   private ByteArrayInputStream buffer;
 
-  @Override protected void setUp() throws Exception {
+  @SuppressWarnings("DoNotMock")
+  @Override
+  protected void setUp() throws Exception {
     super.setUp();
-    hasher = EasyMock.createMock(Hasher.class);
-    hashFunction = EasyMock.createMock(HashFunction.class);
+    hasher = mock(Hasher.class);
+    hashFunction = mock(HashFunction.class);
     buffer = new ByteArrayInputStream(testBytes);
 
-    EasyMock.expect(hashFunction.newHasher()).andReturn(hasher).once();
-    EasyMock.replay(hashFunction);
+    when(hashFunction.newHasher()).thenReturn(hasher);
   }
 
   public void testRead_putSingleByte() throws Exception {
-    EasyMock.expect(hasher.putByte((byte) 'y')).andReturn(hasher).once();
-    EasyMock.replay(hasher);
     HashingInputStream in = new HashingInputStream(hashFunction, buffer);
 
     int b = in.read();
     assertEquals('y', b);
 
-    EasyMock.verify(hashFunction);
-    EasyMock.verify(hasher);
+    verify(hasher).putByte((byte) 'y');
+    verify(hashFunction).newHasher();
+    verifyNoMoreInteractions(hashFunction, hasher);
   }
 
   public void testRead_putByteArray() throws Exception {
-    EasyMock.expect(hasher.putBytes(aryEq(testBytes), eq(0), eq(testBytes.length)))
-        .andReturn(hasher).once();
-    EasyMock.replay(hasher);
     HashingInputStream in = new HashingInputStream(hashFunction, buffer);
 
     byte[] buf = new byte[4];
@@ -72,14 +73,12 @@ public class HashingInputStreamTest extends TestCase {
       assertEquals(testBytes[i], buf[i]);
     }
 
-    EasyMock.verify(hashFunction);
-    EasyMock.verify(hasher);
+    verify(hasher).putBytes(testBytes, 0, testBytes.length);
+    verify(hashFunction).newHasher();
+    verifyNoMoreInteractions(hashFunction, hasher);
   }
 
   public void testRead_putByteArrayAtPos() throws Exception {
-    EasyMock.expect(hasher.putBytes(aryEq(Arrays.copyOfRange(testBytes, 0, 3)), eq(0), eq(3)))
-        .andReturn(hasher).once();
-    EasyMock.replay(hasher);
     HashingInputStream in = new HashingInputStream(hashFunction, buffer);
 
     byte[] buf = new byte[3];
@@ -89,18 +88,16 @@ public class HashingInputStreamTest extends TestCase {
       assertEquals(testBytes[i], buf[i]);
     }
 
-    EasyMock.verify(hashFunction);
-    EasyMock.verify(hasher);
+    verify(hasher).putBytes(Arrays.copyOf(testBytes, 3), 0, 3);
+    verify(hashFunction).newHasher();
+    verifyNoMoreInteractions(hashFunction, hasher);
   }
 
   public void testRead_putByteArrayOutOfBound() throws Exception {
     byte[] buf = new byte[100];
     byte[] expectedBytes = buf.clone();
-    System.arraycopy(testBytes, 0, expectedBytes, 0, testBytes.length);
+    arraycopy(testBytes, 0, expectedBytes, 0, testBytes.length);
 
-    EasyMock.expect(hasher.putBytes(aryEq(expectedBytes), eq(0), eq(4)))
-        .andReturn(hasher).once();
-    EasyMock.replay(hasher);
     HashingInputStream in = new HashingInputStream(hashFunction, buffer);
 
     int numOfByteRead = in.read(buf, 0, 100);
@@ -109,13 +106,14 @@ public class HashingInputStreamTest extends TestCase {
       assertEquals(testBytes[i], buf[i]);
     }
 
-    EasyMock.verify(hashFunction);
-    EasyMock.verify(hasher);
+    verify(hasher).putBytes(expectedBytes, 0, 4);
+    verify(hashFunction).newHasher();
+    verifyNoMoreInteractions(hashFunction, hasher);
   }
 
   public void testHash_hashesCorrectly() throws Exception {
-    HashCode expectedHash = Hashing.md5().hashBytes(testBytes);
-    HashingInputStream in = new HashingInputStream(Hashing.md5(), buffer);
+    HashCode expectedHash = sha512().hashBytes(testBytes);
+    HashingInputStream in = new HashingInputStream(sha512(), buffer);
 
     byte[] buf = new byte[4];
     int numOfByteRead = in.read(buf, 0, buf.length);
@@ -125,8 +123,8 @@ public class HashingInputStreamTest extends TestCase {
   }
 
   public void testHash_hashesCorrectlyReadOutOfBound() throws Exception {
-    HashCode expectedHash = Hashing.md5().hashBytes(testBytes);
-    HashingInputStream in = new HashingInputStream(Hashing.md5(), buffer);
+    HashCode expectedHash = sha512().hashBytes(testBytes);
+    HashingInputStream in = new HashingInputStream(sha512(), buffer);
 
     byte[] buf = new byte[100];
     int numOfByteRead = in.read(buf, 0, buf.length);
@@ -137,8 +135,8 @@ public class HashingInputStreamTest extends TestCase {
   }
 
   public void testHash_hashesCorrectlyForSkipping() throws Exception {
-    HashCode expectedHash = Hashing.md5().hashBytes(new byte[] {'m', 's'});
-    HashingInputStream in = new HashingInputStream(Hashing.md5(), buffer);
+    HashCode expectedHash = sha512().hashBytes(new byte[] {'m', 's'});
+    HashingInputStream in = new HashingInputStream(sha512(), buffer);
 
     long numOfByteSkipped = in.skip(2);
     assertEquals(2, numOfByteSkipped);
@@ -150,10 +148,10 @@ public class HashingInputStreamTest extends TestCase {
     assertEquals(expectedHash, in.hash());
   }
 
-  public void testChecksForNull() throws Exception {
+  public void testChecksForNull() {
     NullPointerTester tester = new NullPointerTester();
 
-    tester.testAllPublicInstanceMethods(new HashingInputStream(Hashing.md5(), buffer));
+    tester.testAllPublicInstanceMethods(new HashingInputStream(sha512(), buffer));
     tester.testAllPublicStaticMethods(HashingInputStream.class);
     tester.testAllPublicConstructors(HashingInputStream.class);
   }

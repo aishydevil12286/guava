@@ -26,21 +26,28 @@ import com.google.common.collect.testing.AbstractCollectionTester;
  */
 @GwtCompatible
 public class CollectionEqualsTester<E> extends AbstractCollectionTester<E> {
+
+  @SuppressWarnings({
+    "SelfEquals", // TODO(cpovirk): Consider using EqualsTester from Guava.
+    "UndefinedEquals", // Comparisons of an object to itself *are* defined.
+  })
   public void testEquals_self() {
-    assertTrue("An Object should be equal to itself.",
-        collection.equals(collection));
+    assertTrue("An Object should be equal to itself.", collection.equals(collection));
   }
 
+  // Comparisons to null *are* defined.
+  @SuppressWarnings("UndefinedEquals")
   public void testEquals_null() {
-    //noinspection ObjectEqualsNull
-    assertFalse("An object should not be equal to null.",
-        collection.equals(null));
+    // noinspection ObjectEqualsNull
+    assertFalse("An object should not be equal to null.", collection.equals(null));
   }
 
+  // A collection should essentially never be equal to a non-collection.
+  @SuppressWarnings("UndefinedEquals")
   public void testEquals_notACollection() {
-    //noinspection EqualsBetweenInconvertibleTypes
-    assertFalse("A Collection should never equal an "
-        + "object that is not a Collection.",
+    // noinspection EqualsBetweenInconvertibleTypes
+    assertFalse(
+        "A Collection should never equal an object that is not a Collection.",
         collection.equals("huh?"));
   }
 }

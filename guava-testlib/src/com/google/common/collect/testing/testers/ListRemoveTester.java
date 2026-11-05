@@ -25,9 +25,8 @@ import com.google.common.collect.testing.features.CollectionFeature;
 import com.google.common.collect.testing.features.CollectionSize;
 
 /**
- * A generic JUnit test which tests {@code remove(Object)} operations on a list.
- * Can't be invoked directly; please see
- * {@link com.google.common.collect.testing.ListTestSuiteBuilder}.
+ * A generic JUnit test which tests {@code remove(Object)} operations on a list. Can't be invoked
+ * directly; please see {@link com.google.common.collect.testing.ListTestSuiteBuilder}.
  *
  * @author George van den Driessche
  */
@@ -42,14 +41,17 @@ public class ListRemoveTester<E> extends AbstractListTester<E> {
 
     int firstIndex = getList().indexOf(duplicate);
     int initialSize = getList().size();
-    assertTrue("remove(present) should return true",
-        getList().remove(duplicate));
-    assertTrue("After remove(duplicate), a list should still contain "
-        + "the duplicate element", getList().contains(duplicate));
-    assertFalse("remove(duplicate) should remove the first instance of the "
-        + "duplicate element in the list",
+    assertTrue("remove(present) should return true", getList().remove(duplicate));
+    assertTrue(
+        "After remove(duplicate), a list should still contain the duplicate element",
+        getList().contains(duplicate));
+    assertFalse(
+        "remove(duplicate) should remove the first instance of the "
+            + "duplicate element in the list",
         firstIndex == getList().indexOf(duplicate));
-    assertEquals("remove(present) should decrease the size of a list by one.",
-        initialSize - 1, getList().size());
+    assertEquals(
+        "remove(present) should decrease the size of a list by one.",
+        initialSize - 1,
+        getList().size());
   }
 }

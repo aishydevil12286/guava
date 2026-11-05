@@ -1,23 +1,24 @@
 /*
  * Copyright (C) 2012 The Guava Authors
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License. You may obtain a copy of the License at
  *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software distributed under the License
+ * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+ * or implied. See the License for the specific language governing permissions and limitations under
+ * the License.
  */
 
 package com.google.common.io;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.common.annotations.GwtIncompatible;
+import com.google.common.annotations.J2ktIncompatible;
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -32,53 +33,54 @@ import java.nio.charset.Charset;
  * is an immutable <i>supplier</i> of {@code OutputStream} instances.
  *
  * <p>{@code ByteSink} provides two kinds of methods:
+ *
  * <ul>
  *   <li><b>Methods that return a stream:</b> These methods should return a <i>new</i>, independent
- *   instance each time they are called. The caller is responsible for ensuring that the returned
- *   stream is closed.
+ *       instance each time they are called. The caller is responsible for ensuring that the
+ *       returned stream is closed.
  *   <li><b>Convenience methods:</b> These are implementations of common operations that are
- *   typically implemented by opening a stream using one of the methods in the first category, doing
- *   something and finally closing the stream or channel that was opened.
+ *       typically implemented by opening a stream using one of the methods in the first category,
+ *       doing something and finally closing the stream or channel that was opened.
  * </ul>
  *
  * @since 14.0
  * @author Colin Decker
  */
+@J2ktIncompatible
+@GwtIncompatible
 public abstract class ByteSink {
 
-  /**
-   * Constructor for use by subclasses.
-   */
+  /** Constructor for use by subclasses. */
   protected ByteSink() {}
 
   /**
-   * Returns a {@link CharSink} view of this {@code ByteSink} that writes characters to this sink
-   * as bytes encoded with the given {@link Charset charset}.
+   * Returns a {@link CharSink} view of this {@code ByteSink} that writes characters to this sink as
+   * bytes encoded with the given {@link Charset charset}.
    */
   public CharSink asCharSink(Charset charset) {
     return new AsCharSink(charset);
   }
 
   /**
-   * Opens a new {@link OutputStream} for writing to this sink. This method should return a new,
+   * Opens a new {@link OutputStream} for writing to this sink. This method returns a new,
    * independent stream each time it is called.
    *
    * <p>The caller is responsible for ensuring that the returned stream is closed.
    *
-   * @throws IOException if an I/O error occurs in the process of opening the stream
+   * @throws IOException if an I/O error occurs while opening the stream
    */
   public abstract OutputStream openStream() throws IOException;
 
   /**
-   * Opens a new buffered {@link OutputStream} for writing to this sink. The returned stream is
-   * not required to be a {@link BufferedOutputStream} in order to allow implementations to simply
-   * delegate to {@link #openStream()} when the stream returned by that method does not benefit
-   * from additional buffering (for example, a {@code ByteArrayOutputStream}). This method should
-   * return a new, independent stream each time it is called.
+   * Opens a new buffered {@link OutputStream} for writing to this sink. The returned stream is not
+   * required to be a {@link BufferedOutputStream} in order to allow implementations to simply
+   * delegate to {@link #openStream()} when the stream returned by that method does not benefit from
+   * additional buffering (for example, a {@code ByteArrayOutputStream}). This method returns a new,
+   * independent stream each time it is called.
    *
    * <p>The caller is responsible for ensuring that the returned stream is closed.
    *
-   * @throws IOException if an I/O error occurs in the process of opening the stream
+   * @throws IOException if an I/O error occurs while opening the stream
    * @since 15.0 (in 14.0 with return type {@link BufferedOutputStream})
    */
   public OutputStream openBufferedStream() throws IOException {
@@ -91,43 +93,29 @@ public abstract class ByteSink {
   /**
    * Writes all the given bytes to this sink.
    *
-   * @throws IOException if an I/O occurs in the process of writing to this sink
+   * @throws IOException if an I/O occurs while writing to this sink
    */
   public void write(byte[] bytes) throws IOException {
     checkNotNull(bytes);
 
-    Closer closer = Closer.create();
-    try {
-      OutputStream out = closer.register(openStream());
+    try (OutputStream out = openStream()) {
       out.write(bytes);
-      out.flush(); // https://code.google.com/p/guava-libraries/issues/detail?id=1330
-    } catch (Throwable e) {
-      throw closer.rethrow(e);
-    } finally {
-      closer.close();
     }
   }
 
   /**
-   * Writes all the bytes from the given {@code InputStream} to this sink. Does not close
-   * {@code input}.
+   * Writes all the bytes from the given {@code InputStream} to this sink. Does not close {@code
+   * input}.
    *
-   * @throws IOException if an I/O occurs in the process of reading from {@code input} or writing to
-   *     this sink
+   * @return the number of bytes written
+   * @throws IOException if an I/O occurs while reading from {@code input} or writing to this sink
    */
+  @CanIgnoreReturnValue
   public long writeFrom(InputStream input) throws IOException {
     checkNotNull(input);
 
-    Closer closer = Closer.create();
-    try {
-      OutputStream out = closer.register(openStream());
-      long written = ByteStreams.copy(input, out);
-      out.flush(); // https://code.google.com/p/guava-libraries/issues/detail?id=1330
-      return written;
-    } catch (Throwable e) {
-      throw closer.rethrow(e);
-    } finally {
-      closer.close();
+    try (OutputStream out = openStream()) {
+      return ByteStreams.copy(input, out);
     }
   }
 
@@ -150,7 +138,7 @@ public abstract class ByteSink {
 
     @Override
     public String toString() {
-      return ByteSink.this.toString() + ".asCharSink(" + charset + ")";
+      return ByteSink.this + ".asCharSink(" + charset + ")";
     }
   }
 }

@@ -25,19 +25,20 @@ import com.google.common.collect.testing.features.CollectionFeature;
 import com.google.common.collect.testing.features.CollectionSize;
 
 /**
- * A generic JUnit test which tests {@code indexOf()} operations on a list.
- * Can't be invoked directly; please see
- * {@link com.google.common.collect.testing.ListTestSuiteBuilder}.
+ * A generic JUnit test which tests {@code indexOf()} operations on a list. Can't be invoked
+ * directly; please see {@link com.google.common.collect.testing.ListTestSuiteBuilder}.
  *
  * @author Chris Povirk
  */
 @GwtCompatible
 public class ListIndexOfTester<E> extends AbstractListIndexOfTester<E> {
-  @Override protected int find(Object o) {
+  @Override
+  protected int find(Object o) {
     return getList().indexOf(o);
   }
 
-  @Override protected String getMethodName() {
+  @Override
+  protected String getMethodName() {
     return "indexOf";
   }
 
@@ -47,7 +48,7 @@ public class ListIndexOfTester<E> extends AbstractListIndexOfTester<E> {
     E[] array = createSamplesArray();
     array[getNumElements() / 2] = e0();
     collection = getSubjectGenerator().create(array);
-    assertEquals("indexOf(duplicate) should return index of first occurrence",
-        0, getList().indexOf(e0()));
+    assertEquals(
+        "indexOf(duplicate) should return index of first occurrence", 0, getList().indexOf(e0()));
   }
 }

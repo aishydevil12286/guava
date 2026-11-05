@@ -6,22 +6,17 @@
  *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the
- * License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software distributed under the License
+ * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+ * or implied. See the License for the specific language governing permissions and limitations under
+ * the License.
  */
 
 package com.google.common.primitives;
 
 import com.google.common.annotations.GwtCompatible;
 
-import javax.annotation.CheckReturnValue;
-
-/**
- * A string to be parsed as a number and the radix to interpret it in.
- */
-@CheckReturnValue
+/** A string to be parsed as a number and the radix to interpret it in. */
 @GwtCompatible
 final class ParseRequest {
   final String rawValue;
@@ -33,7 +28,7 @@ final class ParseRequest {
   }
 
   static ParseRequest fromString(String stringValue) {
-    if (stringValue.length() == 0) {
+    if (stringValue.isEmpty()) {
       throw new NumberFormatException("empty string");
     }
 

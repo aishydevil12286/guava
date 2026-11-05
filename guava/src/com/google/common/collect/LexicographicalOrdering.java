@@ -17,27 +17,25 @@
 package com.google.common.collect;
 
 import com.google.common.annotations.GwtCompatible;
-
+import com.google.common.annotations.GwtIncompatible;
+import com.google.common.annotations.J2ktIncompatible;
 import java.io.Serializable;
+import java.util.Comparator;
 import java.util.Iterator;
+import org.jspecify.annotations.Nullable;
 
-import javax.annotation.Nullable;
+/** An ordering which sorts iterables by comparing corresponding elements pairwise. */
+@GwtCompatible
+final class LexicographicalOrdering<T extends @Nullable Object> extends Ordering<Iterable<T>>
+    implements Serializable {
+  final Comparator<? super T> elementOrder;
 
-/**
- * An ordering which sorts iterables by comparing corresponding elements
- * pairwise.
- */
-@GwtCompatible(serializable = true)
-final class LexicographicalOrdering<T>
-    extends Ordering<Iterable<T>> implements Serializable {
-  final Ordering<? super T> elementOrder;
-
-  LexicographicalOrdering(Ordering<? super T> elementOrder) {
+  LexicographicalOrdering(Comparator<? super T> elementOrder) {
     this.elementOrder = elementOrder;
   }
 
-  @Override public int compare(
-      Iterable<T> leftIterable, Iterable<T> rightIterable) {
+  @Override
+  public int compare(Iterable<T> leftIterable, Iterable<T> rightIterable) {
     Iterator<T> left = leftIterable.iterator();
     Iterator<T> right = rightIterable.iterator();
     while (left.hasNext()) {
@@ -55,7 +53,8 @@ final class LexicographicalOrdering<T>
     return 0;
   }
 
-  @Override public boolean equals(@Nullable Object object) {
+  @Override
+  public boolean equals(@Nullable Object object) {
     if (object == this) {
       return true;
     }
@@ -66,13 +65,15 @@ final class LexicographicalOrdering<T>
     return false;
   }
 
-  @Override public int hashCode() {
+  @Override
+  public int hashCode() {
     return elementOrder.hashCode() ^ 2075626741; // meaningless
   }
 
-  @Override public String toString() {
+  @Override
+  public String toString() {
     return elementOrder + ".lexicographical()";
   }
 
-  private static final long serialVersionUID = 0;
+  @GwtIncompatible @J2ktIncompatible private static final long serialVersionUID = 0;
 }

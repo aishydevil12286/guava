@@ -17,16 +17,14 @@
 package com.google.common.collect.testing.testers;
 
 import static com.google.common.collect.testing.features.CollectionSize.ZERO;
+import static java.util.Arrays.asList;
 
 import com.google.common.annotations.GwtCompatible;
 import com.google.common.collect.testing.features.CollectionSize;
 
-import java.util.Arrays;
-
 /**
- * A generic JUnit test which tests {@code toArray()} operations on a list.
- * Can't be invoked directly; please see
- * {@link com.google.common.collect.testing.ListTestSuiteBuilder}.
+ * A generic JUnit test which tests {@code toArray()} operations on a list. Can't be invoked
+ * directly; please see {@link com.google.common.collect.testing.ListTestSuiteBuilder}.
  *
  * @author Chris Povirk
  */
@@ -36,25 +34,21 @@ public class ListToArrayTester<E> extends AbstractListTester<E> {
 
   public void testToArray_noArg() {
     Object[] actual = getList().toArray();
-    assertArrayEquals("toArray() order should match list",
-        createOrderedArray(), actual);
+    assertArrayEquals("toArray() order should match list", createOrderedArray(), actual);
   }
 
   @CollectionSize.Require(absent = ZERO)
   public void testToArray_tooSmall() {
     Object[] actual = getList().toArray(new Object[0]);
-    assertArrayEquals("toArray(tooSmall) order should match list",
-        createOrderedArray(), actual);
+    assertArrayEquals("toArray(tooSmall) order should match list", createOrderedArray(), actual);
   }
 
   public void testToArray_largeEnough() {
     Object[] actual = getList().toArray(new Object[getNumElements()]);
-    assertArrayEquals("toArray(largeEnough) order should match list",
-        createOrderedArray(), actual);
+    assertArrayEquals("toArray(largeEnough) order should match list", createOrderedArray(), actual);
   }
 
-  private static void assertArrayEquals(String message, Object[] expected,
-      Object[] actual) {
-    assertEquals(message, Arrays.asList(expected), Arrays.asList(actual));
+  private static void assertArrayEquals(String message, Object[] expected, Object[] actual) {
+    assertEquals(message, asList(expected), asList(actual));
   }
 }

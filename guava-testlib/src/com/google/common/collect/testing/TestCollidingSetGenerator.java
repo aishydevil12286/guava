@@ -18,8 +18,8 @@ package com.google.common.collect.testing;
 
 import com.google.common.annotations.GwtCompatible;
 import com.google.common.collect.testing.SampleElements.Colliders;
-
 import java.util.List;
+import org.jspecify.annotations.NullMarked;
 
 /**
  * A generator using sample elements whose hash codes all collide badly.
@@ -27,8 +27,8 @@ import java.util.List;
  * @author Kevin Bourrillion
  */
 @GwtCompatible
-public abstract class TestCollidingSetGenerator
-    implements TestSetGenerator<Object> {
+@NullMarked
+public abstract class TestCollidingSetGenerator implements TestSetGenerator<Object> {
   @Override
   public SampleElements<Object> samples() {
     return new Colliders();

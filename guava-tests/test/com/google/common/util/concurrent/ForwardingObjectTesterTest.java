@@ -16,38 +16,51 @@
 
 package com.google.common.util.concurrent;
 
-import com.google.common.collect.ForwardingObject;
+import static org.junit.Assert.assertThrows;
 
+import com.google.common.annotations.GwtIncompatible;
+import com.google.common.annotations.J2ktIncompatible;
+import com.google.common.collect.ForwardingObject;
 import junit.framework.TestCase;
+import org.jspecify.annotations.NullUnmarked;
 
 /**
  * Tests for {@link ForwardingObjectTester}.
  *
  * @author Ben Yu
  */
+@NullUnmarked
+@GwtIncompatible
+@J2ktIncompatible
 public class ForwardingObjectTesterTest extends TestCase {
 
   public void testFailsToForward() {
-    try {
-      ForwardingObjectTester.testForwardingObject(FailToForward.class);
-    } catch (AssertionError expected) {
-      return;
-    }
-    fail("Should have thrown");
+    Throwable expected =
+        assertThrows(
+            Throwable.class,
+            () -> ForwardingObjectTester.testForwardingObject(FailToForward.class));
+    assertTrue(
+        "Expected AssertionError or UnsupportedOperationException",
+        expected instanceof AssertionError || expected instanceof UnsupportedOperationException);
   }
 
+  @AndroidIncompatible // TODO(cpovirk): java.lang.IllegalAccessError: superclass not accessible
   public void testSuccessfulForwarding() {
     ForwardingObjectTester.testForwardingObject(ForwardToDelegate.class);
   }
 
-  private static abstract class FailToForward extends ForwardingObject implements Runnable {
-    @Override public void run() {}
+  private abstract static class FailToForward extends ForwardingObject implements Runnable {
+    @Override
+    public void run() {}
   }
 
-  private static abstract class ForwardToDelegate extends ForwardingObject implements Runnable {
-    @Override public void run() {
+  private abstract static class ForwardToDelegate extends ForwardingObject implements Runnable {
+    @Override
+    public void run() {
       delegate().run();
     }
-    @Override protected abstract Runnable delegate();
+
+    @Override
+    protected abstract Runnable delegate();
   }
 }

@@ -16,39 +16,43 @@
 
 package com.google.common.hash;
 
-import static com.google.common.base.Charsets.UTF_16LE;
+import static com.google.common.collect.Iterables.concat;
+import static com.google.common.truth.Truth.assertThat;
+import static java.nio.charset.StandardCharsets.UTF_16LE;
+import static java.util.Collections.singleton;
+import static org.junit.Assert.assertThrows;
 
-import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
-import com.google.common.hash.AbstractStreamingHashFunction.AbstractStreamingHasher;
+import com.google.common.annotations.J2ktIncompatible;
 import com.google.common.hash.HashTestUtils.RandomHasherAction;
-
-import junit.framework.TestCase;
-
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.charset.Charset;
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Random;
+import junit.framework.TestCase;
+import org.jspecify.annotations.NullUnmarked;
 
 /**
  * Tests for AbstractStreamingHasher.
  *
  * @author Dimitris Andreou
  */
+// All tests use Sink, which uses the currently J2KT-incompatible AbstractStreamingHasher
+// (Plus, testString in particular requires UTF_16LE support.)
+@J2ktIncompatible
+@NullUnmarked
 public class AbstractStreamingHasherTest extends TestCase {
   public void testBytes() {
     Sink sink = new Sink(4); // byte order insignificant here
-    byte[] expected = { 1, 2, 3, 4, 5, 6, 7, 8 };
+    byte[] expected = {1, 2, 3, 4, 5, 6, 7, 8};
     sink.putByte((byte) 1);
-    sink.putBytes(new byte[] { 2, 3, 4, 5, 6 });
+    sink.putBytes(new byte[] {2, 3, 4, 5, 6});
     sink.putByte((byte) 7);
     sink.putBytes(new byte[] {});
-    sink.putBytes(new byte[] { 8 });
-    sink.hash();
+    sink.putBytes(new byte[] {8});
+    HashCode unused = sink.hash();
     sink.assertInvariants(8);
     sink.assertBytes(expected);
   }
@@ -56,33 +60,33 @@ public class AbstractStreamingHasherTest extends TestCase {
   public void testShort() {
     Sink sink = new Sink(4);
     sink.putShort((short) 0x0201);
-    sink.hash();
+    HashCode unused = sink.hash();
     sink.assertInvariants(2);
-    sink.assertBytes(new byte[] { 1, 2, 0, 0 }); // padded with zeros
+    sink.assertBytes(new byte[] {1, 2, 0, 0}); // padded with zeros
   }
 
   public void testInt() {
     Sink sink = new Sink(4);
     sink.putInt(0x04030201);
-    sink.hash();
+    HashCode unused = sink.hash();
     sink.assertInvariants(4);
-    sink.assertBytes(new byte[] { 1, 2, 3, 4 });
+    sink.assertBytes(new byte[] {1, 2, 3, 4});
   }
 
   public void testLong() {
     Sink sink = new Sink(8);
     sink.putLong(0x0807060504030201L);
-    sink.hash();
+    HashCode unused = sink.hash();
     sink.assertInvariants(8);
-    sink.assertBytes(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 });
+    sink.assertBytes(new byte[] {1, 2, 3, 4, 5, 6, 7, 8});
   }
 
   public void testChar() {
     Sink sink = new Sink(4);
     sink.putChar((char) 0x0201);
-    sink.hash();
+    HashCode unused = sink.hash();
     sink.assertInvariants(2);
-    sink.assertBytes(new byte[] { 1, 2, 0, 0  }); // padded with zeros
+    sink.assertBytes(new byte[] {1, 2, 0, 0}); // padded with zeros
   }
 
   public void testString() {
@@ -95,53 +99,43 @@ public class AbstractStreamingHasherTest extends TestCase {
           new Sink(4).putUnencodedChars(s).hash(),
           new Sink(4).putBytes(s.getBytes(UTF_16LE)).hash());
       assertEquals(
-          new Sink(4).putUnencodedChars(s).hash(),
-          new Sink(4).putString(s, UTF_16LE).hash());
+          new Sink(4).putUnencodedChars(s).hash(), new Sink(4).putString(s, UTF_16LE).hash());
     }
   }
 
   public void testFloat() {
     Sink sink = new Sink(4);
     sink.putFloat(Float.intBitsToFloat(0x04030201));
-    sink.hash();
+    HashCode unused = sink.hash();
     sink.assertInvariants(4);
-    sink.assertBytes(new byte[] { 1, 2, 3, 4 });
+    sink.assertBytes(new byte[] {1, 2, 3, 4});
   }
 
   public void testDouble() {
     Sink sink = new Sink(8);
     sink.putDouble(Double.longBitsToDouble(0x0807060504030201L));
-    sink.hash();
+    HashCode unused = sink.hash();
     sink.assertInvariants(8);
-    sink.assertBytes(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 });
+    sink.assertBytes(new byte[] {1, 2, 3, 4, 5, 6, 7, 8});
   }
 
   public void testCorrectExceptions() {
     Sink sink = new Sink(4);
-    try {
-      sink.putBytes(new byte[8], -1, 4);
-      fail();
-    } catch (IndexOutOfBoundsException ok) {}
-    try {
-      sink.putBytes(new byte[8], 0, 16);
-      fail();
-    } catch (IndexOutOfBoundsException ok) {}
-    try {
-      sink.putBytes(new byte[8], 0, -1);
-      fail();
-    } catch (IndexOutOfBoundsException ok) {}
+    assertThrows(IndexOutOfBoundsException.class, () -> sink.putBytes(new byte[8], -1, 4));
+    assertThrows(IndexOutOfBoundsException.class, () -> sink.putBytes(new byte[8], 0, 16));
+    assertThrows(IndexOutOfBoundsException.class, () -> sink.putBytes(new byte[8], 0, -1));
   }
 
   /**
-   * This test creates a long random sequence of inputs, then a lot of differently configured
-   * sinks process it; all should produce the same answer, the only difference should be the
-   * number of process()/processRemaining() invocations, due to alignment.
+   * This test creates a long random sequence of inputs, then a lot of differently configured sinks
+   * process it; all should produce the same answer, the only difference should be the number of
+   * process()/processRemaining() invocations, due to alignment.
    */
-  public void testExhaustive() throws Exception {
+  public void testExhaustive() {
     Random random = new Random(0); // will iteratively make more debuggable, each time it breaks
     for (int totalInsertions = 0; totalInsertions < 200; totalInsertions++) {
 
-      List<Sink> sinks = Lists.newArrayList();
+      List<Sink> sinks = new ArrayList<>();
       for (int chunkSize = 4; chunkSize <= 32; chunkSize++) {
         for (int bufferSize = chunkSize; bufferSize <= chunkSize * 4; bufferSize += chunkSize) {
           // yes, that's a lot of sinks!
@@ -155,8 +149,7 @@ public class AbstractStreamingHasherTest extends TestCase {
       Control control = new Control();
       Hasher controlSink = control.newHasher(1024);
 
-      Iterable<Hasher> sinksAndControl =
-          Iterables.concat(sinks, Collections.singleton(controlSink));
+      Iterable<Hasher> sinksAndControl = concat(sinks, singleton(controlSink));
       for (int insertion = 0; insertion < totalInsertions; insertion++) {
         RandomHasherAction.pickAtRandom(random).performAction(random, sinksAndControl);
       }
@@ -167,7 +160,7 @@ public class AbstractStreamingHasherTest extends TestCase {
         hasher.putInt(intToPut);
       }
       for (Sink sink : sinks) {
-        sink.hash();
+        HashCode unused = sink.hash();
       }
 
       byte[] expected = controlSink.hash().asBytes();
@@ -198,25 +191,28 @@ public class AbstractStreamingHasherTest extends TestCase {
       this.bufferSize = chunkSize;
     }
 
-    @Override HashCode makeHash() {
+    @Override
+    protected HashCode makeHash() {
       return HashCode.fromBytes(out.toByteArray());
     }
 
-    @Override protected void process(ByteBuffer bb) {
+    @Override
+    protected void process(ByteBuffer bb) {
       processCalled++;
       assertEquals(ByteOrder.LITTLE_ENDIAN, bb.order());
-      assertTrue(bb.remaining() >= chunkSize);
+      assertThat(bb.remaining()).isAtLeast(chunkSize);
       for (int i = 0; i < chunkSize; i++) {
         out.write(bb.get());
       }
     }
 
-    @Override protected void processRemaining(ByteBuffer bb) {
+    @Override
+    protected void processRemaining(ByteBuffer bb) {
       assertFalse(remainingCalled);
       remainingCalled = true;
       assertEquals(ByteOrder.LITTLE_ENDIAN, bb.order());
-      assertTrue(bb.remaining() > 0);
-      assertTrue(bb.remaining() < bufferSize);
+      assertThat(bb.remaining()).isGreaterThan(0);
+      assertThat(bb.remaining()).isLessThan(bufferSize);
       int before = processCalled;
       super.processRemaining(bb);
       int after = processCalled;
@@ -249,32 +245,12 @@ public class AbstractStreamingHasherTest extends TestCase {
   // Assumes that AbstractNonStreamingHashFunction works properly (must be tested elsewhere!)
   private static class Control extends AbstractNonStreamingHashFunction {
     @Override
-    public HashCode hashBytes(byte[] input) {
-      return HashCode.fromBytes(input);
-    }
-
-    @Override
     public HashCode hashBytes(byte[] input, int off, int len) {
-      return hashBytes(Arrays.copyOfRange(input, off, off + len));
+      return HashCode.fromBytes(Arrays.copyOfRange(input, off, off + len));
     }
 
     @Override
     public int bits() {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public HashCode hashString(CharSequence input, Charset charset) {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public HashCode hashLong(long input) {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public HashCode hashInt(int input) {
       throw new UnsupportedOperationException();
     }
   }

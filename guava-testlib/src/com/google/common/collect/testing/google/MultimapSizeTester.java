@@ -26,9 +26,10 @@ import com.google.common.annotations.GwtCompatible;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.testing.features.CollectionSize;
 import com.google.common.collect.testing.features.MapFeature;
-
 import java.util.Collection;
 import java.util.Map.Entry;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Tester for the {@code size} methods of {@code Multimap} and its views.
@@ -36,7 +37,9 @@ import java.util.Map.Entry;
  * @author Louis Wasserman
  */
 @GwtCompatible
-public class MultimapSizeTester<K, V> extends AbstractMultimapTester<K, V, Multimap<K, V>> {
+@NullMarked
+public class MultimapSizeTester<K extends @Nullable Object, V extends @Nullable Object>
+    extends AbstractMultimapTester<K, V, Multimap<K, V>> {
 
   public void testSize() {
     int expectedSize = getNumElements();
@@ -93,10 +96,7 @@ public class MultimapSizeTester<K, V> extends AbstractMultimapTester<K, V, Multi
 
   @CollectionSize.Require(SEVERAL)
   public void testSizeMultipleValues() {
-    resetContainer(
-        mapEntry(k0(), v0()),
-        mapEntry(k0(), v1()),
-        mapEntry(k0(), v2()));
+    resetContainer(mapEntry(k0(), v0()), mapEntry(k0(), v1()), mapEntry(k0(), v2()));
 
     assertEquals(3, multimap().size());
     assertEquals(3, multimap().entries().size());

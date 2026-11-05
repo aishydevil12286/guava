@@ -16,12 +16,13 @@
 
 package com.google.common.collect;
 
+import static com.google.common.collect.Iterators.singletonIterator;
+
 import com.google.common.annotations.GwtCompatible;
+import com.google.common.annotations.GwtIncompatible;
+import com.google.common.annotations.J2ktIncompatible;
 import com.google.common.base.Preconditions;
-
-import java.util.Set;
-
-import javax.annotation.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Implementation of {@link ImmutableSet} with exactly one element.
@@ -29,28 +30,16 @@ import javax.annotation.Nullable;
  * @author Kevin Bourrillion
  * @author Nick Kralevich
  */
-@GwtCompatible(serializable = true, emulated = true)
+@GwtCompatible
 @SuppressWarnings("serial") // uses writeReplace(), not default serialization
 final class SingletonImmutableSet<E> extends ImmutableSet<E> {
+  // We deliberately avoid caching the asList and hashCode here, to ensure that with
+  // compressed oops, a SingletonImmutableSet packs all the way down to the optimal 16 bytes.
 
   final transient E element;
-  // This is transient because it will be recalculated on the first
-  // call to hashCode().
-  //
-  // A race condition is avoided since threads will either see that the value
-  // is zero and recalculate it themselves, or two threads will see it at
-  // the same time, and both recalculate it.  If the cachedHashCode is 0,
-  // it will always be recalculated, unfortunately.
-  private transient int cachedHashCode;
 
   SingletonImmutableSet(E element) {
     this.element = Preconditions.checkNotNull(element);
-  }
-
-  SingletonImmutableSet(E element, int hashCode) {
-    // Guaranteed to be non-null by the presence of the pre-computed hash code.
-    this.element = element;
-    cachedHashCode = hashCode;
   }
 
   @Override
@@ -58,58 +47,48 @@ final class SingletonImmutableSet<E> extends ImmutableSet<E> {
     return 1;
   }
 
-  @Override public boolean isEmpty() {
-    return false;
-  }
-
-  @Override public boolean contains(Object target) {
+  @Override
+  public boolean contains(@Nullable Object target) {
     return element.equals(target);
   }
 
-  @Override public UnmodifiableIterator<E> iterator() {
-    return Iterators.singletonIterator(element);
+  @Override
+  public UnmodifiableIterator<E> iterator() {
+    return singletonIterator(element);
   }
 
-  @Override boolean isPartialView() {
+  @Override
+  public ImmutableList<E> asList() {
+    return ImmutableList.of(element);
+  }
+
+  @Override
+  boolean isPartialView() {
     return false;
   }
 
   @Override
-  int copyIntoArray(Object[] dst, int offset) {
+  int copyIntoArray(@Nullable Object[] dst, int offset) {
     dst[offset] = element;
     return offset + 1;
   }
 
-  @Override public boolean equals(@Nullable Object object) {
-    if (object == this) {
-      return true;
-    }
-    if (object instanceof Set) {
-      Set<?> that = (Set<?>) object;
-      return that.size() == 1 && element.equals(that.iterator().next());
-    }
-    return false;
+  @Override
+  public int hashCode() {
+    return element.hashCode();
   }
 
-  @Override public final int hashCode() {
-    // Racy single-check.
-    int code = cachedHashCode;
-    if (code == 0) {
-      cachedHashCode = code = element.hashCode();
-    }
-    return code;
+  @Override
+  public String toString() {
+    return '[' + element.toString() + ']';
   }
 
-  @Override boolean isHashCodeFast() {
-    return cachedHashCode != 0;
-  }
-
-  @Override public String toString() {
-    String elementToString = element.toString();
-    return new StringBuilder(elementToString.length() + 2)
-        .append('[')
-        .append(elementToString)
-        .append(']')
-        .toString();
+  // redeclare to help optimizers with b/310253115
+  @SuppressWarnings("RedundantOverride")
+  @Override
+  @J2ktIncompatible
+  @GwtIncompatible
+    Object writeReplace() {
+    return super.writeReplace();
   }
 }

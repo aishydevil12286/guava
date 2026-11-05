@@ -16,32 +16,32 @@
 
 package com.google.common.util.concurrent;
 
+import static com.google.common.truth.Truth.assertThat;
+import static com.google.common.util.concurrent.Futures.addCallback;
+import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
+import static org.junit.Assert.assertThrows;
+
 import com.google.common.annotations.GwtCompatible;
-import com.google.common.annotations.GwtIncompatible;
-import com.google.common.base.Preconditions;
-
-import junit.framework.TestCase;
-
-import org.mockito.Mockito;
-
+import com.google.common.util.concurrent.TestExceptions.SomeError;
+import com.google.errorprone.annotations.concurrent.GuardedBy;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-
-import javax.annotation.Nullable;
+import junit.framework.TestCase;
+import org.jspecify.annotations.NullUnmarked;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Test for {@link FutureCallback}.
  *
  * @author Anthony Zana
  */
-@GwtCompatible(emulated = true)
+@GwtCompatible
+@NullUnmarked
 public class FutureCallbackTest extends TestCase {
   public void testSameThreadSuccess() {
     SettableFuture<String> f = SettableFuture.create();
     MockCallback callback = new MockCallback("foo");
-    Futures.addCallback(f, callback);
+    addCallback(f, callback, directExecutor());
     f.set("foo");
   }
 
@@ -59,7 +59,7 @@ public class FutureCallbackTest extends TestCase {
     SettableFuture<String> f = SettableFuture.create();
     Exception e = new IllegalArgumentException("foo not found");
     MockCallback callback = new MockCallback(e);
-    Futures.addCallback(f, callback);
+    addCallback(f, callback, directExecutor());
     f.setException(e);
   }
 
@@ -67,88 +67,113 @@ public class FutureCallbackTest extends TestCase {
     SettableFuture<String> f = SettableFuture.create();
     FutureCallback<String> callback =
         new FutureCallback<String>() {
-          private boolean called = false;
+          final Object monitor = new Object();
+
+          @GuardedBy("monitor")
+          boolean called = false;
+
           @Override
           public void onSuccess(String result) {
             fail("Was not expecting onSuccess() to be called.");
           }
 
           @Override
-          public synchronized void onFailure(Throwable t) {
-            assertFalse(called);
-            assertTrue(t instanceof CancellationException);
-            called = true;
+          public void onFailure(Throwable t) {
+            synchronized (monitor) {
+              assertFalse(called);
+              assertThat(t).isInstanceOf(CancellationException.class);
+              called = true;
+            }
           }
         };
-    Futures.addCallback(f, callback);
+    addCallback(f, callback, directExecutor());
     f.cancel(true);
   }
 
   public void testThrowErrorFromGet() {
     Error error = new AssertionError("ASSERT!");
-    ListenableFuture<String> f = ThrowingFuture.throwingError(error);
+    ListenableFuture<String> f = UncheckedThrowingFuture.throwingError(error);
     MockCallback callback = new MockCallback(error);
-    Futures.addCallback(f, callback);
+    addCallback(f, callback, directExecutor());
   }
 
-  public void testRuntimeExeceptionFromGet() {
+  public void testRuntimeExceptionFromGet() {
     RuntimeException e = new IllegalArgumentException("foo not found");
-    ListenableFuture<String> f = ThrowingFuture.throwingRuntimeException(e);
+    ListenableFuture<String> f = UncheckedThrowingFuture.throwingRuntimeException(e);
     MockCallback callback = new MockCallback(e);
-    Futures.addCallback(f, callback);
+    addCallback(f, callback, directExecutor());
   }
 
-  @GwtIncompatible("Mockito")
   public void testOnSuccessThrowsRuntimeException() throws Exception {
     RuntimeException exception = new RuntimeException();
     String result = "result";
     SettableFuture<String> future = SettableFuture.create();
-    @SuppressWarnings("unchecked") // Safe for a mock
-    FutureCallback<String> callback = Mockito.mock(FutureCallback.class);
-    Futures.addCallback(future, callback);
-    Mockito.doThrow(exception).when(callback).onSuccess(result);
+    int[] successCalls = new int[1];
+    int[] failureCalls = new int[1];
+    FutureCallback<String> callback =
+        new FutureCallback<String>() {
+          @Override
+          public void onSuccess(String result) {
+            successCalls[0]++;
+            throw exception;
+          }
+
+          @Override
+          public void onFailure(Throwable t) {
+            failureCalls[0]++;
+          }
+        };
+    addCallback(future, callback, directExecutor());
     future.set(result);
-    assertEquals(result, future.get());
-    Mockito.verify(callback).onSuccess(result);
-    Mockito.verifyNoMoreInteractions(callback);
+    assertThat(future.get()).isEqualTo(result);
+    assertThat(successCalls[0]).isEqualTo(1);
+    assertThat(failureCalls[0]).isEqualTo(0);
   }
 
-  @GwtIncompatible("Mockito")
   public void testOnSuccessThrowsError() throws Exception {
-    class TestError extends Error {}
-    TestError error = new TestError();
+    SomeError error = new SomeError();
     String result = "result";
     SettableFuture<String> future = SettableFuture.create();
-    @SuppressWarnings("unchecked") // Safe for a mock
-    FutureCallback<String> callback = Mockito.mock(FutureCallback.class);
-    Futures.addCallback(future, callback);
-    Mockito.doThrow(error).when(callback).onSuccess(result);
-    try {
-      future.set(result);
-      fail("Should have thrown");
-    } catch (TestError e) {
-      assertSame(error, e);
-    }
-    assertEquals(result, future.get());
-    Mockito.verify(callback).onSuccess(result);
-    Mockito.verifyNoMoreInteractions(callback);
+    int[] successCalls = new int[1];
+    int[] failureCalls = new int[1];
+    FutureCallback<String> callback =
+        new FutureCallback<String>() {
+          @Override
+          public void onSuccess(String result) {
+            successCalls[0]++;
+            throw error;
+          }
+
+          @Override
+          public void onFailure(Throwable t) {
+            failureCalls[0]++;
+          }
+        };
+    addCallback(future, callback, directExecutor());
+    SomeError e = assertThrows(SomeError.class, () -> future.set(result));
+    assertThat(e).isEqualTo(error);
+    assertThat(future.get()).isEqualTo(result);
+    assertThat(successCalls[0]).isEqualTo(1);
+    assertThat(failureCalls[0]).isEqualTo(0);
   }
 
   public void testWildcardFuture() {
     SettableFuture<String> settable = SettableFuture.create();
     ListenableFuture<?> f = settable;
-    FutureCallback<Object> callback = new FutureCallback<Object>() {
-      @Override
-      public void onSuccess(Object result) {}
+    FutureCallback<@Nullable Object> callback =
+        new FutureCallback<@Nullable Object>() {
+          @Override
+          public void onSuccess(@Nullable Object result) {}
 
-      @Override
-      public void onFailure(Throwable t) {}
-    };
-    Futures.addCallback(f, callback);
+          @Override
+          public void onFailure(Throwable t) {}
+        };
+    addCallback(f, callback, directExecutor());
   }
 
-  private class CountingSameThreadExecutor implements Executor {
+  private static final class CountingSameThreadExecutor implements Executor {
     int runCount = 0;
+
     @Override
     public void execute(Runnable command) {
       command.run();
@@ -156,106 +181,39 @@ public class FutureCallbackTest extends TestCase {
     }
   }
 
-  // TODO(user): Move to testing, unify with RuntimeExceptionThrowingFuture
-
-  /**
-   * A {@link Future} implementation which always throws directly from calls to
-   * get() (i.e. not wrapped in ExecutionException.
-   * For just a normal Future failure, use {@link SettableFuture}).
-   *
-   * <p>Useful for testing the behavior of Future utilities against odd futures.
-   *
-   * @author Anthony Zana
-   */
-  private static class ThrowingFuture<V> implements ListenableFuture<V> {
-    private final Error error;
-    private final RuntimeException runtime;
-
-    public static <V> ListenableFuture<V> throwingError(Error error) {
-      return new ThrowingFuture<V>(error);
-    }
-
-    public static <V> ListenableFuture<V>
-        throwingRuntimeException(RuntimeException e) {
-      return new ThrowingFuture<V>(e);
-    }
-
-    private ThrowingFuture(Error error) {
-      this.error = Preconditions.checkNotNull(error);
-      this.runtime = null;
-    }
-
-    public ThrowingFuture(RuntimeException e) {
-      this.runtime = Preconditions.checkNotNull(e);
-      this.error = null;
-    }
-
-    @Override
-    public boolean cancel(boolean mayInterruptIfRunning) {
-      return false;
-    }
-
-    @Override
-    public boolean isCancelled() {
-      return false;
-    }
-
-    @Override
-    public boolean isDone() {
-      return true;
-    }
-
-    @Override
-    public V get() {
-      throwOnGet();
-      throw new AssertionError("Unreachable");
-    }
-
-    @Override
-    public V get(long timeout, TimeUnit unit) {
-      throwOnGet();
-      throw new AssertionError("Unreachable");
-    }
-
-    @Override
-    public void addListener(Runnable listener, Executor executor) {
-      executor.execute(listener);
-    }
-
-    private void throwOnGet() {
-      if (error != null) {
-        throw error;
-      } else {
-        throw runtime;
-      }
-    }
-  }
-
-  private final class MockCallback implements FutureCallback<String> {
+  private static final class MockCallback implements FutureCallback<String> {
     @Nullable private String value = null;
     @Nullable private Throwable failure = null;
+
+    @GuardedBy("monitor")
     private boolean wasCalled = false;
+
+    private final Object monitor = new Object();
 
     MockCallback(String expectedValue) {
       this.value = expectedValue;
     }
 
-    public MockCallback(Throwable expectedFailure) {
+    MockCallback(Throwable expectedFailure) {
       this.failure = expectedFailure;
     }
 
     @Override
-    public synchronized void onSuccess(String result) {
-      assertFalse(wasCalled);
-      wasCalled = true;
-      assertEquals(value, result);
+    public void onSuccess(String result) {
+      synchronized (monitor) {
+        assertFalse(wasCalled);
+        wasCalled = true;
+        assertThat(result).isEqualTo(value);
+      }
     }
 
     @Override
     public synchronized void onFailure(Throwable t) {
-      assertFalse(wasCalled);
-      wasCalled = true;
-      assertEquals(failure, t);
+      synchronized (monitor) {
+        assertFalse(wasCalled);
+        wasCalled = true;
+        assertThat(t).isEqualTo(failure);
+      }
     }
   }
 }

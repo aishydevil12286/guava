@@ -16,30 +16,24 @@
 
 package com.google.common.util.concurrent;
 
-import static org.easymock.EasyMock.createMock;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.verify;
+import static com.google.common.truth.Truth.assertThat;
 
+import com.google.common.annotations.GwtIncompatible;
+import com.google.common.annotations.J2ktIncompatible;
 import com.google.common.util.concurrent.UncaughtExceptionHandlers.Exiter;
-
 import junit.framework.TestCase;
+import org.jspecify.annotations.NullUnmarked;
 
 /**
  * @author Gregory Kick
  */
-
+@NullUnmarked
+@GwtIncompatible
+@J2ktIncompatible
 public class UncaughtExceptionHandlersTest extends TestCase {
-
-  private Runtime runtimeMock;
-
-  @Override protected void setUp() {
-    runtimeMock = createMock(Runtime.class);
-  }
-
   public void testExiter() {
-    runtimeMock.exit(1);
-    replay(runtimeMock);
-    new Exiter(runtimeMock).uncaughtException(new Thread(), new Exception());
-    verify(runtimeMock);
+    int[] exitCode = {-1};
+    new Exiter(code -> exitCode[0] = code).uncaughtException(new Thread(), new Exception());
+    assertThat(exitCode[0]).isEqualTo(1);
   }
 }

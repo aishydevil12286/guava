@@ -16,35 +16,44 @@
 
 package com.google.common.collect.testing;
 
-import com.google.common.annotations.GwtCompatible;
+import static java.util.Collections.sort;
 
-import java.util.Collections;
+import com.google.common.annotations.GwtCompatible;
 import java.util.List;
 import java.util.SortedSet;
+import org.jspecify.annotations.NullMarked;
 
 /**
- * Create string sets for testing collections that are sorted by natural
- * ordering.
+ * Create string sets for testing collections that are sorted by natural ordering.
  *
  * @author Jared Levy
  */
 @GwtCompatible
-public abstract class TestStringSortedSetGenerator
-    extends TestStringSetGenerator implements TestSortedSetGenerator<String> {
+@NullMarked
+public abstract class TestStringSortedSetGenerator extends TestStringSetGenerator
+    implements TestSortedSetGenerator<String> {
 
   @Override
   public SortedSet<String> create(Object... elements) {
     return (SortedSet<String>) super.create(elements);
   }
 
-  @Override protected abstract SortedSet<String> create(String[] elements);
+  @Override
+  protected abstract SortedSet<String> create(String[] elements);
 
   /** Sorts the elements by their natural ordering. */
-  @Override public List<String> order(List<String> insertionOrder) {
-    Collections.sort(insertionOrder);
+  /*
+   * While the current implementation returns `this`, that's not something we mean to guarantee.
+   * Callers of TestContainerGenerator.order need to be prepared for implementations to return a new
+   * collection.
+   */
+  @SuppressWarnings("CanIgnoreReturnValueSuggester")
+  @Override
+  public List<String> order(List<String> insertionOrder) {
+    sort(insertionOrder);
     return insertionOrder;
   }
-  
+
   @Override
   public String belowSamplesLesser() {
     return "!! a";

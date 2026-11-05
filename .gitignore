@@ -2,6 +2,7 @@
 target/
 *.ser
 *.ec
+.mvn/wrapper/maven-wrapper.jar
 
 # IntelliJ Idea
 .idea/
@@ -15,3 +16,6 @@ out/
 .project
 .settings/
 .metadata/
+
+# OS X
+.DS_Store

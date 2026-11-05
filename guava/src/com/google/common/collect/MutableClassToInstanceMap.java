@@ -16,71 +16,186 @@
 
 package com.google.common.collect;
 
-import com.google.common.collect.MapConstraints.ConstrainedMap;
-import com.google.common.primitives.Primitives;
+import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.common.annotations.GwtIncompatible;
+import com.google.common.annotations.J2ktIncompatible;
+import com.google.common.collect.ForwardingMapEntry.SimpleForwardingMapEntry;
+import com.google.common.collect.ForwardingSet.SimpleForwardingSet;
+import com.google.common.primitives.Primitives;
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
+import java.io.InvalidObjectException;
+import java.io.ObjectInputStream;
+import java.io.Serializable;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
+import java.util.Spliterator;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
- * A mutable class-to-instance map backed by an arbitrary user-provided map.
- * See also {@link ImmutableClassToInstanceMap}.
- * 
+ * A mutable class-to-instance map backed by an arbitrary user-provided map. See also {@link
+ * ImmutableClassToInstanceMap}.
+ *
  * <p>See the Guava User Guide article on <a href=
- * "http://code.google.com/p/guava-libraries/wiki/NewCollectionTypesExplained#ClassToInstanceMap">
- * {@code ClassToInstanceMap}</a>.
+ * "https://github.com/google/guava/wiki/NewCollectionTypesExplained#classtoinstancemap">{@code
+ * ClassToInstanceMap}</a>.
  *
  * @author Kevin Bourrillion
- * @since 2.0 (imported from Google Collections Library)
+ * @since 2.0
  */
-public final class MutableClassToInstanceMap<B>
-    extends ConstrainedMap<Class<? extends B>, B>
-    implements ClassToInstanceMap<B> {
+@J2ktIncompatible
+@GwtIncompatible
+@SuppressWarnings("serial") // using writeReplace instead of standard serialization
+public final class MutableClassToInstanceMap<B extends @Nullable Object>
+    extends ForwardingMap<Class<? extends @NonNull B>, B>
+    implements ClassToInstanceMap<B>, Serializable {
 
   /**
-   * Returns a new {@code MutableClassToInstanceMap} instance backed by a {@link
-   * HashMap} using the default initial capacity and load factor.
+   * Returns a new {@code MutableClassToInstanceMap} instance backed by a {@link HashMap} using the
+   * default initial capacity and load factor.
    */
-  public static <B> MutableClassToInstanceMap<B> create() {
-    return new MutableClassToInstanceMap<B>(
-        new HashMap<Class<? extends B>, B>());
+  public static <B extends @Nullable Object> MutableClassToInstanceMap<B> create() {
+    return new MutableClassToInstanceMap<>(new HashMap<Class<? extends @NonNull B>, B>());
   }
 
   /**
-   * Returns a new {@code MutableClassToInstanceMap} instance backed by a given
-   * empty {@code backingMap}. The caller surrenders control of the backing map,
-   * and thus should not allow any direct references to it to remain accessible.
+   * Returns a new {@code MutableClassToInstanceMap} instance backed by a given empty {@code
+   * backingMap}. The caller surrenders control of the backing map, and thus should not allow any
+   * direct references to it to remain accessible.
    */
-  public static <B> MutableClassToInstanceMap<B> create(
-      Map<Class<? extends B>, B> backingMap) {
-    return new MutableClassToInstanceMap<B>(backingMap);
+  public static <B extends @Nullable Object> MutableClassToInstanceMap<B> create(
+      Map<Class<? extends @NonNull B>, B> backingMap) {
+    return new MutableClassToInstanceMap<>(backingMap);
   }
 
-  private MutableClassToInstanceMap(Map<Class<? extends B>, B> delegate) {
-    super(delegate, VALUE_CAN_BE_CAST_TO_KEY);
-  }
+  private final Map<Class<? extends @NonNull B>, B> delegate;
 
-  private static final MapConstraint<Class<?>, Object> VALUE_CAN_BE_CAST_TO_KEY
-      = new MapConstraint<Class<?>, Object>() {
-    @Override
-    public void checkKeyValue(Class<?> key, Object value) {
-      cast(key, value);
-    }
-  };
+  private MutableClassToInstanceMap(Map<Class<? extends @NonNull B>, B> delegate) {
+    this.delegate = checkNotNull(delegate);
+  }
 
   @Override
-  public <T extends B> T putInstance(Class<T> type, T value) {
+  protected Map<Class<? extends @NonNull B>, B> delegate() {
+    return delegate;
+  }
+
+  /**
+   * Wraps the {@code setValue} implementation of an {@code Entry} to enforce the class constraint.
+   */
+  private static <B extends @Nullable Object> Entry<Class<? extends @NonNull B>, B> checkedEntry(
+      Entry<Class<? extends @NonNull B>, B> entry) {
+    return new SimpleForwardingMapEntry<Class<? extends @NonNull B>, B>(entry) {
+      @Override
+      @ParametricNullness
+      public B setValue(@ParametricNullness B value) {
+        cast(getKey(), value);
+        return super.setValue(value);
+      }
+    };
+  }
+
+  @Override
+  public Set<Entry<Class<? extends @NonNull B>, B>> entrySet() {
+    return new SimpleForwardingSet<Entry<Class<? extends @NonNull B>, B>>(delegate().entrySet()) {
+      @Override
+      public Spliterator<Entry<Class<? extends @NonNull B>, B>> spliterator() {
+        return CollectSpliterators.map(
+            delegate().spliterator(),
+            Spliterator.DISTINCT | Spliterator.NONNULL,
+            MutableClassToInstanceMap::checkedEntry);
+      }
+
+      @Override
+      public Iterator<Entry<Class<? extends @NonNull B>, B>> iterator() {
+        return new TransformedIterator<
+            Entry<Class<? extends @NonNull B>, B>, Entry<Class<? extends @NonNull B>, B>>(
+            delegate().iterator()) {
+          @Override
+          Entry<Class<? extends @NonNull B>, B> transform(
+              Entry<Class<? extends @NonNull B>, B> from) {
+            return checkedEntry(from);
+          }
+        };
+      }
+
+      @Override
+      public Object[] toArray() {
+        /*
+         * standardToArray returns `@Nullable Object[]` rather than `Object[]` but only because it
+         * can be used with collections that may contain null. This collection is a collection of
+         * non-null Entry objects (Entry objects that might contain null values but are not
+         * themselves null), so we can treat it as a plain `Object[]`.
+         */
+        @SuppressWarnings("nullness")
+        Object[] result = standardToArray();
+        return result;
+      }
+
+      @Override
+      @SuppressWarnings("nullness") // b/192354773 in our checker affects toArray declarations
+      public <T extends @Nullable Object> T[] toArray(T[] array) {
+        return standardToArray(array);
+      }
+    };
+  }
+
+  @Override
+  @CanIgnoreReturnValue
+  public @Nullable B put(Class<? extends @NonNull B> key, @ParametricNullness B value) {
+    cast(key, value); // If we pass this result to `put` below, it upsets our nullness checker.
+    return super.put(key, value);
+  }
+
+  @Override
+  public void putAll(Map<? extends Class<? extends @NonNull B>, ? extends B> map) {
+    Map<Class<? extends @NonNull B>, B> copy = new LinkedHashMap<>(map);
+    for (Entry<? extends Class<? extends @NonNull B>, B> entry : copy.entrySet()) {
+      cast(entry.getKey(), entry.getValue());
+    }
+    super.putAll(copy);
+  }
+
+  @CanIgnoreReturnValue
+  @Override
+  public <T extends B> @Nullable T putInstance(
+      Class<@NonNull T> type, @ParametricNullness T value) {
     return cast(type, put(type, value));
   }
 
   @Override
-  public <T extends B> T getInstance(Class<T> type) {
+  public <T extends @NonNull B> @Nullable T getInstance(Class<T> type) {
     return cast(type, get(type));
   }
 
-  private static <B, T extends B> T cast(Class<T> type, B value) {
+  @CanIgnoreReturnValue
+  private static <T> @Nullable T cast(Class<T> type, @Nullable Object value) {
     return Primitives.wrap(type).cast(value);
   }
 
-  private static final long serialVersionUID = 0;
+    private Object writeReplace() {
+    return new SerializedForm<>(delegate());
+  }
+
+    private void readObject(ObjectInputStream stream) throws InvalidObjectException {
+    throw new InvalidObjectException("Use SerializedForm");
+  }
+
+  /** Serialized form of the map, to avoid serializing the constraint. */
+  private static final class SerializedForm<B extends @Nullable Object> implements Serializable {
+    private final Map<Class<? extends @NonNull B>, B> backingMap;
+
+    SerializedForm(Map<Class<? extends @NonNull B>, B> backingMap) {
+      this.backingMap = backingMap;
+    }
+
+    Object readResolve() {
+      return create(backingMap);
+    }
+
+    private static final long serialVersionUID = 0;
+  }
 }

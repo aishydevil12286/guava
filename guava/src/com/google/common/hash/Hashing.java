@@ -17,35 +17,34 @@ package com.google.common.hash;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.common.annotations.Beta;
-import com.google.common.base.Supplier;
-
-import java.security.MessageDigest;
+import com.google.common.annotations.J2ktIncompatible;
+import com.google.errorprone.annotations.Immutable;
+import com.google.j2objc.annotations.J2ObjCIncompatible;
+import java.security.Key;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.zip.Adler32;
 import java.util.zip.CRC32;
+import java.util.zip.CRC32C;
 import java.util.zip.Checksum;
-
-import javax.annotation.CheckReturnValue;
-import javax.annotation.Nullable;
+import javax.crypto.spec.SecretKeySpec;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Static methods to obtain {@link HashFunction} instances, and other static hashing-related
  * utilities.
  *
- * <p>A comparison of the various hash functions can be found
- * <a href="http://goo.gl/jS7HH">here</a>.
+ * <p>A comparison of the various hash functions can be found <a
+ * href="https://docs.google.com/spreadsheets/d/1_q2EVcxA2HjcrlVMbaqXwMj31h9M5-Bqj_m8vITOwwk/">here</a>.
  *
  * @author Kevin Bourrillion
  * @author Dimitris Andreou
  * @author Kurt Alfred Kluever
  * @since 11.0
  */
-@Beta
-@CheckReturnValue
 public final class Hashing {
   /**
    * Returns a general-purpose, <b>temporary-use</b>, non-cryptographic hash function. The algorithm
@@ -53,29 +52,33 @@ public final class Hashing {
    *
    * <p><b>Warning:</b> a new random seed for these functions is chosen each time the {@code
    * Hashing} class is loaded. <b>Do not use this method</b> if hash codes may escape the current
-   * process in any way, for example being sent over RPC, or saved to disk.
+   * process in any way, for example being sent over RPC, or saved to disk. For a general-purpose,
+   * non-cryptographic hash function that will never change behavior, we suggest {@link
+   * #murmur3_128}.
    *
    * <p>Repeated calls to this method on the same loaded {@code Hashing} class, using the same value
    * for {@code minimumBits}, will return identically-behaving {@link HashFunction} instances.
    *
-   * @param minimumBits a positive integer (can be arbitrarily large)
+   * @param minimumBits a positive integer. This can be arbitrarily large. The returned {@link
+   *     HashFunction} instance may use memory proportional to this integer.
    * @return a hash function, described above, that produces hash codes of length {@code
    *     minimumBits} or greater
    */
+  @J2ktIncompatible
   public static HashFunction goodFastHash(int minimumBits) {
     int bits = checkPositiveAndMakeMultipleOf32(minimumBits);
 
     if (bits == 32) {
-      return Murmur3_32Holder.GOOD_FAST_HASH_FUNCTION_32;
+      return Murmur3_32HashFunction.GOOD_FAST_HASH_32;
     }
     if (bits <= 128) {
-      return Murmur3_128Holder.GOOD_FAST_HASH_FUNCTION_128;
+      return Murmur3_128HashFunction.GOOD_FAST_HASH_128;
     }
 
     // Otherwise, join together some 128-bit murmur3s
     int hashFunctionsNeeded = (bits + 127) / 128;
     HashFunction[] hashFunctions = new HashFunction[hashFunctionsNeeded];
-    hashFunctions[0] = Murmur3_128Holder.GOOD_FAST_HASH_FUNCTION_128;
+    hashFunctions[0] = Murmur3_128HashFunction.GOOD_FAST_HASH_128;
     int seed = GOOD_FAST_HASH_SEED;
     for (int i = 1; i < hashFunctionsNeeded; i++) {
       seed += 1500450271; // a prime; shouldn't matter
@@ -88,239 +91,499 @@ public final class Hashing {
    * Used to randomize {@link #goodFastHash} instances, so that programs which persist anything
    * dependent on the hash codes they produce will fail sooner.
    */
-  private static final int GOOD_FAST_HASH_SEED = (int) System.currentTimeMillis();
+  @SuppressWarnings("GoodTime") // reading system time without TimeSource
+  static final int GOOD_FAST_HASH_SEED = (int) System.currentTimeMillis();
 
   /**
-   * Returns a hash function implementing the
-   * <a href="http://smhasher.googlecode.com/svn/trunk/MurmurHash3.cpp">
-   * 32-bit murmur3 algorithm, x86 variant</a> (little-endian variant),
-   * using the given seed value.
+   * Returns a hash function implementing the <a
+   * href="https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp">32-bit murmur3
+   * algorithm, x86 variant</a> (little-endian variant), using the given seed value, <b>with a known
+   * bug</b> as described in the deprecation text.
    *
-   * <p>The exact C++ equivalent is the MurmurHash3_x86_32 function (Murmur3A).
+   * <p>The C++ equivalent is the MurmurHash3_x86_32 function (Murmur3A), which however does not
+   * have the bug.
+   *
+   * @deprecated This implementation produces incorrect hash values from the {@link
+   *     HashFunction#hashString} method if the string contains non-BMP characters. Use {@link
+   *     #murmur3_32_fixed(int)} instead.
    */
+  @Deprecated
+  @SuppressWarnings("IdentifierName") // the best we could do for adjacent digit blocks
+  @J2ktIncompatible
   public static HashFunction murmur3_32(int seed) {
-    return new Murmur3_32HashFunction(seed);
+    return new Murmur3_32HashFunction(seed, /* supplementaryPlaneFix= */ false);
   }
 
   /**
-   * Returns a hash function implementing the
-   * <a href="http://smhasher.googlecode.com/svn/trunk/MurmurHash3.cpp">
-   * 32-bit murmur3 algorithm, x86 variant</a> (little-endian variant),
-   * using a seed value of zero.
+   * Returns a hash function implementing the <a
+   * href="https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp">32-bit murmur3
+   * algorithm, x86 variant</a> (little-endian variant), using the given seed value, <b>with a known
+   * bug</b> as described in the deprecation text.
+   *
+   * <p>The C++ equivalent is the MurmurHash3_x86_32 function (Murmur3A), which however does not
+   * have the bug.
+   *
+   * @deprecated This implementation produces incorrect hash values from the {@link
+   *     HashFunction#hashString} method if the string contains non-BMP characters. Use {@link
+   *     #murmur3_32_fixed()} instead.
+   */
+  @Deprecated
+  @SuppressWarnings("IdentifierName") // the best we could do for adjacent digit blocks
+  @J2ktIncompatible
+  public static HashFunction murmur3_32() {
+    return Murmur3_32HashFunction.MURMUR3_32;
+  }
+
+  /**
+   * Returns a hash function implementing the <a
+   * href="https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp">32-bit murmur3
+   * algorithm, x86 variant</a> (little-endian variant), using the given seed value.
    *
    * <p>The exact C++ equivalent is the MurmurHash3_x86_32 function (Murmur3A).
+   *
+   * <p>This method is called {@code murmur3_32_fixed} because it fixes a bug in the {@code
+   * HashFunction} returned by the original {@code murmur3_32} method.
+   *
+   * @since 31.0
    */
-  public static HashFunction murmur3_32() {
-    return Murmur3_32Holder.MURMUR3_32;
-  }
-
-  private static class Murmur3_32Holder {
-    static final HashFunction MURMUR3_32 = new Murmur3_32HashFunction(0);
-
-    /** Returned by {@link #goodFastHash} when {@code minimumBits <= 32}. */
-    static final HashFunction GOOD_FAST_HASH_FUNCTION_32 = murmur3_32(GOOD_FAST_HASH_SEED);
+  @SuppressWarnings("IdentifierName") // the best we could do for adjacent digit blocks
+  @J2ktIncompatible
+  public static HashFunction murmur3_32_fixed(int seed) {
+    return new Murmur3_32HashFunction(seed, /* supplementaryPlaneFix= */ true);
   }
 
   /**
-   * Returns a hash function implementing the
-   * <a href="http://smhasher.googlecode.com/svn/trunk/MurmurHash3.cpp">
-   * 128-bit murmur3 algorithm, x64 variant</a> (little-endian variant),
-   * using the given seed value.
+   * Returns a hash function implementing the <a
+   * href="https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp">32-bit murmur3
+   * algorithm, x86 variant</a> (little-endian variant), using a seed value of zero.
+   *
+   * <p>The exact C++ equivalent is the MurmurHash3_x86_32 function (Murmur3A).
+   *
+   * <p>This method is called {@code murmur3_32_fixed} because it fixes a bug in the {@code
+   * HashFunction} returned by the original {@code murmur3_32} method.
+   *
+   * @since 31.0
+   */
+  @SuppressWarnings("IdentifierName") // the best we could do for adjacent digit blocks
+  @J2ktIncompatible
+  public static HashFunction murmur3_32_fixed() {
+    return Murmur3_32HashFunction.MURMUR3_32_FIXED;
+  }
+
+  /**
+   * Returns a hash function implementing the <a
+   * href="https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp">128-bit murmur3
+   * algorithm, x64 variant</a> (little-endian variant), using the given seed value.
    *
    * <p>The exact C++ equivalent is the MurmurHash3_x64_128 function (Murmur3F).
    */
+  @SuppressWarnings("IdentifierName") // the best we could do for adjacent digit blocks
+  @J2ktIncompatible
   public static HashFunction murmur3_128(int seed) {
     return new Murmur3_128HashFunction(seed);
   }
 
   /**
-   * Returns a hash function implementing the
-   * <a href="http://smhasher.googlecode.com/svn/trunk/MurmurHash3.cpp">
-   * 128-bit murmur3 algorithm, x64 variant</a> (little-endian variant),
-   * using a seed value of zero.
+   * Returns a hash function implementing the <a
+   * href="https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp">128-bit murmur3
+   * algorithm, x64 variant</a> (little-endian variant), using a seed value of zero.
    *
    * <p>The exact C++ equivalent is the MurmurHash3_x64_128 function (Murmur3F).
    */
+  @SuppressWarnings("IdentifierName") // the best we could do for adjacent digit blocks
+  @J2ktIncompatible
   public static HashFunction murmur3_128() {
-    return Murmur3_128Holder.MURMUR3_128;
-  }
-
-  private static class Murmur3_128Holder {
-    static final HashFunction MURMUR3_128 = new Murmur3_128HashFunction(0);
-
-    /** Returned by {@link #goodFastHash} when {@code 32 < minimumBits <= 128}. */
-    static final HashFunction GOOD_FAST_HASH_FUNCTION_128 = murmur3_128(GOOD_FAST_HASH_SEED);
+    return Murmur3_128HashFunction.MURMUR3_128;
   }
 
   /**
-   * Returns a hash function implementing the
-   * <a href="https://131002.net/siphash/">64-bit SipHash-2-4 algorithm</a>
-   * using a seed value of {@code k = 00 01 02 ...}.
+   * Returns a hash function implementing the <a href="https://131002.net/siphash/">64-bit
+   * SipHash-2-4 algorithm</a> using a seed value of {@code k = 00 01 02 ...}.
    *
    * @since 15.0
    */
+  @J2ktIncompatible
   public static HashFunction sipHash24() {
-    return SipHash24Holder.SIP_HASH_24;
-  }
-
-  private static class SipHash24Holder {
-    static final HashFunction SIP_HASH_24 =
-        new SipHashFunction(2, 4, 0x0706050403020100L, 0x0f0e0d0c0b0a0908L);
+    return SipHashFunction.SIP_HASH_24;
   }
 
   /**
-   * Returns a hash function implementing the
-   * <a href="https://131002.net/siphash/">64-bit SipHash-2-4 algorithm</a>
-   * using the given seed.
+   * Returns a hash function implementing the <a href="https://131002.net/siphash/">64-bit
+   * SipHash-2-4 algorithm</a> using the given seed.
    *
    * @since 15.0
    */
+  @J2ktIncompatible
   public static HashFunction sipHash24(long k0, long k1) {
     return new SipHashFunction(2, 4, k0, k1);
   }
 
   /**
-   * Returns a hash function implementing the MD5 hash algorithm (128 hash bits) by delegating to
-   * the MD5 {@link MessageDigest}.
+   * Returns a hash function implementing the MD5 hash algorithm (128 hash bits).
+   *
+   * @deprecated If you must interoperate with a system that requires MD5, then use this method,
+   *     despite its deprecation. But if you can choose your hash function, avoid MD5, which is
+   *     neither fast nor secure. As of January 2017, we suggest:
+   *     <ul>
+   *       <li>For security:
+   *           {@link Hashing#sha256} or a higher-level API.
+   *       <li>For speed: {@link Hashing#goodFastHash}, though see its docs for caveats.
+   *     </ul>
    */
+  @Deprecated
   public static HashFunction md5() {
     return Md5Holder.MD5;
   }
 
-  private static class Md5Holder {
+  private static final class Md5Holder {
     static final HashFunction MD5 = new MessageDigestHashFunction("MD5", "Hashing.md5()");
   }
 
   /**
-   * Returns a hash function implementing the SHA-1 algorithm (160 hash bits) by delegating to the
-   * SHA-1 {@link MessageDigest}.
+   * Returns a hash function implementing the SHA-1 algorithm (160 hash bits).
+   *
+   * @deprecated If you must interoperate with a system that requires SHA-1, then use this method,
+   *     despite its deprecation. But if you can choose your hash function, avoid SHA-1, which is
+   *     neither fast nor secure. As of January 2017, we suggest:
+   *     <ul>
+   *       <li>For security:
+   *           {@link Hashing#sha256} or a higher-level API.
+   *       <li>For speed: {@link Hashing#goodFastHash}, though see its docs for caveats.
+   *     </ul>
    */
+  @Deprecated
   public static HashFunction sha1() {
     return Sha1Holder.SHA_1;
   }
 
-  private static class Sha1Holder {
-    static final HashFunction SHA_1 =
-        new MessageDigestHashFunction("SHA-1", "Hashing.sha1()");
+  private static final class Sha1Holder {
+    static final HashFunction SHA_1 = new MessageDigestHashFunction("SHA-1", "Hashing.sha1()");
   }
 
-  /**
-   * Returns a hash function implementing the SHA-256 algorithm (256 hash bits) by delegating to
-   * the SHA-256 {@link MessageDigest}.
-   */
+  /** Returns a hash function implementing the SHA-256 algorithm (256 hash bits). */
   public static HashFunction sha256() {
     return Sha256Holder.SHA_256;
   }
 
-  private static class Sha256Holder {
+  private static final class Sha256Holder {
     static final HashFunction SHA_256 =
         new MessageDigestHashFunction("SHA-256", "Hashing.sha256()");
   }
 
   /**
-   * Returns a hash function implementing the SHA-384 algorithm (384 hash bits) by delegating to
-   * the SHA-384 {@link MessageDigest}.
+   * Returns a hash function implementing the SHA-384 algorithm (384 hash bits).
    *
    * @since 19.0
    */
+  @J2ktIncompatible
   public static HashFunction sha384() {
     return Sha384Holder.SHA_384;
   }
 
-  private static class Sha384Holder {
+  private static final class Sha384Holder {
     static final HashFunction SHA_384 =
         new MessageDigestHashFunction("SHA-384", "Hashing.sha384()");
   }
 
-  /**
-   * Returns a hash function implementing the SHA-512 algorithm (512 hash bits) by delegating to the
-   * SHA-512 {@link MessageDigest}.
-   */
+  /** Returns a hash function implementing the SHA-512 algorithm (512 hash bits). */
+  @J2ktIncompatible
   public static HashFunction sha512() {
     return Sha512Holder.SHA_512;
   }
 
-  private static class Sha512Holder {
+  private static final class Sha512Holder {
     static final HashFunction SHA_512 =
         new MessageDigestHashFunction("SHA-512", "Hashing.sha512()");
+  }
+
+  /**
+   * Returns a hash function implementing the Message Authentication Code (MAC) algorithm, using the
+   * MD5 (128 hash bits) hash function and the given secret key.
+   *
+   * <p>If you are designing a new system that needs HMAC, prefer {@link #hmacSha256} or other
+   * future-proof algorithms <a
+   * href="https://datatracker.ietf.org/doc/html/rfc6151#section-2.3">over {@code hmacMd5}</a>.
+   *
+   * @param key the secret key
+   * @throws IllegalArgumentException if the given key is inappropriate for initializing this MAC
+   * @since 20.0
+   */
+  @J2ktIncompatible
+  public static HashFunction hmacMd5(Key key) {
+    return new MacHashFunction("HmacMD5", key, hmacToString("hmacMd5", key));
+  }
+
+  /**
+   * Returns a hash function implementing the Message Authentication Code (MAC) algorithm, using the
+   * MD5 (128 hash bits) hash function and a {@link SecretKeySpec} created from the given byte array
+   * and the MD5 algorithm.
+   *
+   * <p>If you are designing a new system that needs HMAC, prefer {@link #hmacSha256} or other
+   * future-proof algorithms <a
+   * href="https://datatracker.ietf.org/doc/html/rfc6151#section-2.3">over {@code hmacMd5}</a>.
+   *
+   * @param key the key material of the secret key
+   * @since 20.0
+   */
+  @J2ktIncompatible
+  public static HashFunction hmacMd5(byte[] key) {
+    return hmacMd5(new SecretKeySpec(checkNotNull(key), "HmacMD5"));
+  }
+
+  /**
+   * Returns a hash function implementing the Message Authentication Code (MAC) algorithm, using the
+   * SHA-1 (160 hash bits) hash function and the given secret key.
+   *
+   * @param key the secret key
+   * @throws IllegalArgumentException if the given key is inappropriate for initializing this MAC
+   * @since 20.0
+   */
+  @J2ktIncompatible
+  public static HashFunction hmacSha1(Key key) {
+    return new MacHashFunction("HmacSHA1", key, hmacToString("hmacSha1", key));
+  }
+
+  /**
+   * Returns a hash function implementing the Message Authentication Code (MAC) algorithm, using the
+   * SHA-1 (160 hash bits) hash function and a {@link SecretKeySpec} created from the given byte
+   * array and the SHA-1 algorithm.
+   *
+   * @param key the key material of the secret key
+   * @since 20.0
+   */
+  @J2ktIncompatible
+  public static HashFunction hmacSha1(byte[] key) {
+    return hmacSha1(new SecretKeySpec(checkNotNull(key), "HmacSHA1"));
+  }
+
+  /**
+   * Returns a hash function implementing the Message Authentication Code (MAC) algorithm, using the
+   * SHA-256 (256 hash bits) hash function and the given secret key.
+   *
+   * @param key the secret key
+   * @throws IllegalArgumentException if the given key is inappropriate for initializing this MAC
+   * @since 20.0
+   */
+  @J2ktIncompatible
+  public static HashFunction hmacSha256(Key key) {
+    return new MacHashFunction("HmacSHA256", key, hmacToString("hmacSha256", key));
+  }
+
+  /**
+   * Returns a hash function implementing the Message Authentication Code (MAC) algorithm, using the
+   * SHA-256 (256 hash bits) hash function and a {@link SecretKeySpec} created from the given byte
+   * array and the SHA-256 algorithm.
+   *
+   * @param key the key material of the secret key
+   * @since 20.0
+   */
+  @J2ktIncompatible
+  public static HashFunction hmacSha256(byte[] key) {
+    return hmacSha256(new SecretKeySpec(checkNotNull(key), "HmacSHA256"));
+  }
+
+  /**
+   * Returns a hash function implementing the Message Authentication Code (MAC) algorithm, using the
+   * SHA-512 (512 hash bits) hash function and the given secret key.
+   *
+   * @param key the secret key
+   * @throws IllegalArgumentException if the given key is inappropriate for initializing this MAC
+   * @since 20.0
+   */
+  @J2ktIncompatible
+  public static HashFunction hmacSha512(Key key) {
+    return new MacHashFunction("HmacSHA512", key, hmacToString("hmacSha512", key));
+  }
+
+  /**
+   * Returns a hash function implementing the Message Authentication Code (MAC) algorithm, using the
+   * SHA-512 (512 hash bits) hash function and a {@link SecretKeySpec} created from the given byte
+   * array and the SHA-512 algorithm.
+   *
+   * @param key the key material of the secret key
+   * @since 20.0
+   */
+  @J2ktIncompatible
+  public static HashFunction hmacSha512(byte[] key) {
+    return hmacSha512(new SecretKeySpec(checkNotNull(key), "HmacSHA512"));
+  }
+
+  private static String hmacToString(String methodName, Key key) {
+    return "Hashing."
+        + methodName
+        + "(Key[algorithm="
+        + key.getAlgorithm()
+        + ", format="
+        + key.getFormat()
+        + "])";
   }
 
   /**
    * Returns a hash function implementing the CRC32C checksum algorithm (32 hash bits) as described
    * by RFC 3720, Section 12.1.
    *
+   * <p>This function is best understood as a <a
+   * href="https://en.wikipedia.org/wiki/Checksum">checksum</a> rather than a true <a
+   * href="https://en.wikipedia.org/wiki/Hash_function">hash function</a>.
+   *
    * @since 18.0
    */
+  @J2ktIncompatible
   public static HashFunction crc32c() {
-    return Crc32cHolder.CRC_32_C;
+    return Crc32CSupplier.HASH_FUNCTION;
   }
 
-  private static final class Crc32cHolder {
-    static final HashFunction CRC_32_C = new Crc32cHashFunction();
+  @Immutable
+  @J2ktIncompatible
+  private enum Crc32CSupplier implements ImmutableSupplier<HashFunction> {
+    @J2ObjCIncompatible
+    JAVA_UTIL_ZIP {
+      @Override
+      public HashFunction get() {
+        return ChecksumType.CRC_32C.hashFunction;
+      }
+    },
+    ABSTRACT_HASH_FUNCTION {
+      @Override
+      public HashFunction get() {
+        return Crc32cHashFunction.CRC_32_C;
+      }
+    };
+
+    static final HashFunction HASH_FUNCTION = pickFunction().get();
+
+    private static Crc32CSupplier pickFunction() {
+      Crc32CSupplier[] functions = values();
+
+      if (functions.length == 1) {
+        // We're running under J2ObjC.
+        return functions[0];
+      }
+
+      // We can't refer to JAVA_UTIL_ZIP directly at compile time because of J2ObjC.
+      Crc32CSupplier javaUtilZip = functions[0];
+
+      try {
+        Class.forName("java.util.zip.CRC32C");
+        return javaUtilZip;
+      } catch (ClassNotFoundException runningUnderJava8) {
+        return ABSTRACT_HASH_FUNCTION;
+      }
+    }
   }
 
   /**
-   * Returns a hash function implementing the CRC-32 checksum algorithm (32 hash bits) by delegating
-   * to the {@link CRC32} {@link Checksum}.
+   * Returns a hash function implementing the CRC-32 checksum algorithm (32 hash bits).
    *
-   * <p>To get the {@code long} value equivalent to {@link Checksum#getValue()} for a
-   * {@code HashCode} produced by this function, use {@link HashCode#padToLong()}.
+   * <p>To get the {@code long} value equivalent to {@link Checksum#getValue()} for a {@code
+   * HashCode} produced by this function, use {@link HashCode#padToLong()}.
+   *
+   * <p>This function is best understood as a <a
+   * href="https://en.wikipedia.org/wiki/Checksum">checksum</a> rather than a true <a
+   * href="https://en.wikipedia.org/wiki/Hash_function">hash function</a>.
    *
    * @since 14.0
    */
+  @J2ktIncompatible
   public static HashFunction crc32() {
-    return Crc32Holder.CRC_32;
-  }
-
-  private static class Crc32Holder {
-    static final HashFunction CRC_32 =
-        checksumHashFunction(ChecksumType.CRC_32, "Hashing.crc32()");
+    return ChecksumType.CRC_32.hashFunction;
   }
 
   /**
-   * Returns a hash function implementing the Adler-32 checksum algorithm (32 hash bits) by
-   * delegating to the {@link Adler32} {@link Checksum}.
+   * Returns a hash function implementing the Adler-32 checksum algorithm (32 hash bits).
    *
-   * <p>To get the {@code long} value equivalent to {@link Checksum#getValue()} for a
-   * {@code HashCode} produced by this function, use {@link HashCode#padToLong()}.
+   * <p>To get the {@code long} value equivalent to {@link Checksum#getValue()} for a {@code
+   * HashCode} produced by this function, use {@link HashCode#padToLong()}.
+   *
+   * <p>This function is best understood as a <a
+   * href="https://en.wikipedia.org/wiki/Checksum">checksum</a> rather than a true <a
+   * href="https://en.wikipedia.org/wiki/Hash_function">hash function</a>.
    *
    * @since 14.0
    */
+  @J2ktIncompatible
   public static HashFunction adler32() {
-    return Adler32Holder.ADLER_32;
+    return ChecksumType.ADLER_32.hashFunction;
   }
 
-  private static class Adler32Holder {
-    static final HashFunction ADLER_32 =
-        checksumHashFunction(ChecksumType.ADLER_32, "Hashing.adler32()");
-  }
-
-  private static HashFunction checksumHashFunction(ChecksumType type, String toString) {
-    return new ChecksumHashFunction(type, type.bits, toString);
-  }
-
-  enum ChecksumType implements Supplier<Checksum> {
-    CRC_32(32) {
+  @Immutable
+  @J2ktIncompatible
+  enum ChecksumType implements ImmutableSupplier<Checksum> {
+    CRC_32("Hashing.crc32()") {
       @Override
       public Checksum get() {
         return new CRC32();
       }
     },
-    ADLER_32(32) {
+    @J2ObjCIncompatible
+    CRC_32C("Hashing.crc32c()") {
+      // Crc32CSupplier.pickFunction uses this only when it finds that CRC32C is available.
+      @SuppressWarnings("Java8ApiChecker")
+      @IgnoreJRERequirement
+      @Override
+      public Checksum get() {
+        return new CRC32C();
+      }
+    },
+    ADLER_32("Hashing.adler32()") {
       @Override
       public Checksum get() {
         return new Adler32();
       }
     };
 
-    private final int bits;
+    public final HashFunction hashFunction;
 
-    ChecksumType(int bits) {
-      this.bits = bits;
+    ChecksumType(String toString) {
+      this.hashFunction = new ChecksumHashFunction(this, 32, toString);
     }
+  }
 
-    @Override
-    public abstract Checksum get();
+  /**
+   * Returns a hash function implementing FarmHash's Fingerprint64, an open-source algorithm.
+   *
+   * <p>This is designed for generating persistent fingerprints of strings. It isn't
+   * cryptographically secure, but it produces a high-quality hash with fewer collisions than some
+   * alternatives we've used in the past.
+   *
+   * <p>FarmHash fingerprints are encoded by {@link HashCode#asBytes} in little-endian order. This
+   * means {@link HashCode#asLong} is guaranteed to return the same value that
+   * farmhash::Fingerprint64() would for the same input (when compared using {@link
+   * com.google.common.primitives.UnsignedLongs}'s encoding of 64-bit unsigned numbers).
+   *
+   * <p>This function is best understood as a <a
+   * href="https://en.wikipedia.org/wiki/Fingerprint_(computing)">fingerprint</a> rather than a true
+   * <a href="https://en.wikipedia.org/wiki/Hash_function">hash function</a>.
+   *
+   * @since 20.0
+   */
+  public static HashFunction farmHashFingerprint64() {
+    return FarmHashFingerprint64.FARMHASH_FINGERPRINT_64;
+  }
+
+  /**
+   * Returns a hash function implementing the Fingerprint2011 hashing function (64 hash bits).
+   *
+   * <p>This is designed for generating persistent fingerprints of strings. It isn't
+   * cryptographically secure, but it produces a high-quality hash with few collisions. Fingerprints
+   * generated using this are byte-wise identical to those created using the C++ version, but note
+   * that this uses unsigned integers (see {@link com.google.common.primitives.UnsignedInts}).
+   * Comparisons between the two should take this into account.
+   *
+   * <p>Fingerprint2011() is a form of Murmur2 on strings up to 32 bytes and a form of CityHash for
+   * longer strings. It could have been one or the other throughout. The main advantage of the
+   * combination is that CityHash has a bunch of special cases for short strings that don't need to
+   * be replicated here. The result will never be 0 or 1.
+   *
+   * <p>This function is best understood as a <a
+   * href="https://en.wikipedia.org/wiki/Fingerprint_(computing)">fingerprint</a> rather than a true
+   * <a href="https://en.wikipedia.org/wiki/Hash_function">hash function</a>.
+   *
+   * @since 31.1
+   */
+  @J2ktIncompatible
+  public static HashFunction fingerprint2011() {
+    return Fingerprint2011.FINGERPRINT_2011;
   }
 
   /**
@@ -329,31 +592,31 @@ public final class Hashing {
    * consistentHash(h, n)} equals:
    *
    * <ul>
-   * <li>{@code n - 1}, with approximate probability {@code 1/n}
-   * <li>{@code consistentHash(h, n - 1)}, otherwise (probability {@code 1 - 1/n})
+   *   <li>{@code n - 1}, with approximate probability {@code 1/n}
+   *   <li>{@code consistentHash(h, n - 1)}, otherwise (probability {@code 1 - 1/n})
    * </ul>
    *
    * <p>This method is suitable for the common use case of dividing work among buckets that meet the
    * following conditions:
    *
    * <ul>
-   * <li>You want to assign the same fraction of inputs to each bucket.
-   * <li>When you reduce the number of buckets, you can accept that the most recently added buckets
-   * will be removed first. More concretely, if you are dividing traffic among tasks, you can
-   * decrease the number of tasks from 15 and 10, killing off the final 5 tasks, and {@code
-   * consistentHash} will handle it. If, however, you are dividing traffic among servers {@code
-   * alpha}, {@code bravo}, and {@code charlie} and you occasionally need to take each of the
-   * servers offline, {@code consistentHash} will be a poor fit: It provides no way for you to
-   * specify which of the three buckets is disappearing. Thus, if your buckets change from {@code
-   * [alpha, bravo, charlie]} to {@code [bravo, charlie]}, it will assign all the old {@code alpha}
-   * traffic to {@code bravo} and all the old {@code bravo} traffic to {@code charlie}, rather than
-   * letting {@code bravo} keep its traffic.
+   *   <li>You want to assign the same fraction of inputs to each bucket.
+   *   <li>When you reduce the number of buckets, you can accept that the most recently added
+   *       buckets will be removed first. More concretely, if you are dividing traffic among tasks,
+   *       you can decrease the number of tasks from 15 and 10, killing off the final 5 tasks, and
+   *       {@code consistentHash} will handle it. If, however, you are dividing traffic among
+   *       servers {@code alpha}, {@code bravo}, and {@code charlie} and you occasionally need to
+   *       take each of the servers offline, {@code consistentHash} will be a poor fit: It provides
+   *       no way for you to specify which of the three buckets is disappearing. Thus, if your
+   *       buckets change from {@code [alpha, bravo, charlie]} to {@code [bravo, charlie]}, it will
+   *       assign all the old {@code alpha} traffic to {@code bravo} and all the old {@code bravo}
+   *       traffic to {@code charlie}, rather than letting {@code bravo} keep its traffic.
    * </ul>
-   *
    *
    * <p>See the <a href="http://en.wikipedia.org/wiki/Consistent_hashing">Wikipedia article on
    * consistent hashing</a> for more information.
    */
+  @J2ktIncompatible
   public static int consistentHash(HashCode hashCode, int buckets) {
     return consistentHash(hashCode.padToLong(), buckets);
   }
@@ -364,42 +627,43 @@ public final class Hashing {
    * n)} equals:
    *
    * <ul>
-   * <li>{@code n - 1}, with approximate probability {@code 1/n}
-   * <li>{@code consistentHash(h, n - 1)}, otherwise (probability {@code 1 - 1/n})
+   *   <li>{@code n - 1}, with approximate probability {@code 1/n}
+   *   <li>{@code consistentHash(h, n - 1)}, otherwise (probability {@code 1 - 1/n})
    * </ul>
    *
    * <p>This method is suitable for the common use case of dividing work among buckets that meet the
    * following conditions:
    *
    * <ul>
-   * <li>You want to assign the same fraction of inputs to each bucket.
-   * <li>When you reduce the number of buckets, you can accept that the most recently added buckets
-   * will be removed first. More concretely, if you are dividing traffic among tasks, you can
-   * decrease the number of tasks from 15 and 10, killing off the final 5 tasks, and {@code
-   * consistentHash} will handle it. If, however, you are dividing traffic among servers {@code
-   * alpha}, {@code bravo}, and {@code charlie} and you occasionally need to take each of the
-   * servers offline, {@code consistentHash} will be a poor fit: It provides no way for you to
-   * specify which of the three buckets is disappearing. Thus, if your buckets change from {@code
-   * [alpha, bravo, charlie]} to {@code [bravo, charlie]}, it will assign all the old {@code alpha}
-   * traffic to {@code bravo} and all the old {@code bravo} traffic to {@code charlie}, rather than
-   * letting {@code bravo} keep its traffic.
+   *   <li>You want to assign the same fraction of inputs to each bucket.
+   *   <li>When you reduce the number of buckets, you can accept that the most recently added
+   *       buckets will be removed first. More concretely, if you are dividing traffic among tasks,
+   *       you can decrease the number of tasks from 15 and 10, killing off the final 5 tasks, and
+   *       {@code consistentHash} will handle it. If, however, you are dividing traffic among
+   *       servers {@code alpha}, {@code bravo}, and {@code charlie} and you occasionally need to
+   *       take each of the servers offline, {@code consistentHash} will be a poor fit: It provides
+   *       no way for you to specify which of the three buckets is disappearing. Thus, if your
+   *       buckets change from {@code [alpha, bravo, charlie]} to {@code [bravo, charlie]}, it will
+   *       assign all the old {@code alpha} traffic to {@code bravo} and all the old {@code bravo}
+   *       traffic to {@code charlie}, rather than letting {@code bravo} keep its traffic.
    * </ul>
-   *
    *
    * <p>See the <a href="http://en.wikipedia.org/wiki/Consistent_hashing">Wikipedia article on
    * consistent hashing</a> for more information.
    */
+  @J2ktIncompatible
   public static int consistentHash(long input, int buckets) {
     checkArgument(buckets > 0, "buckets must be positive: %s", buckets);
-    LinearCongruentialGenerator generator = new LinearCongruentialGenerator(input);
+    long generatorState = input;
     int candidate = 0;
-    int next;
+    int generated;
 
     // Jump from bucket to bucket until we go out of range
     while (true) {
-      next = (int) ((candidate + 1) / generator.nextDouble());
-      if (next >= 0 && next < buckets) {
-        candidate = next;
+      generatorState = LinearCongruentialGenerator.nextState(generatorState);
+      generated = (int) ((candidate + 1) / LinearCongruentialGenerator.toDouble(generatorState));
+      if (generated >= 0 && generated < buckets) {
+        candidate = generated;
       } else {
         return candidate;
       }
@@ -407,24 +671,24 @@ public final class Hashing {
   }
 
   /**
-   * Returns a hash code, having the same bit length as each of the input hash codes,
-   * that combines the information of these hash codes in an ordered fashion. That
-   * is, whenever two equal hash codes are produced by two calls to this method, it
-   * is <i>as likely as possible</i> that each was computed from the <i>same</i>
-   * input hash codes in the <i>same</i> order.
+   * Returns a hash code, having the same bit length as each of the input hash codes, that combines
+   * the information of these hash codes in an ordered fashion. That is, whenever two equal hash
+   * codes are produced by two calls to this method, it is <i>as likely as possible</i> that each
+   * was computed from the <i>same</i> input hash codes in the <i>same</i> order.
    *
-   * @throws IllegalArgumentException if {@code hashCodes} is empty, or the hash codes
-   *     do not all have the same bit length
+   * @throws IllegalArgumentException if {@code hashCodes} is empty, or the hash codes do not all
+   *     have the same bit length
    */
+  @J2ktIncompatible
   public static HashCode combineOrdered(Iterable<HashCode> hashCodes) {
     Iterator<HashCode> iterator = hashCodes.iterator();
     checkArgument(iterator.hasNext(), "Must be at least 1 hash code to combine.");
     int bits = iterator.next().bits();
     byte[] resultBytes = new byte[bits / 8];
     for (HashCode hashCode : hashCodes) {
-      byte[] nextBytes = hashCode.asBytes();
-      checkArgument(nextBytes.length == resultBytes.length,
-          "All hashcodes must have the same bit length.");
+      byte[] nextBytes = hashCode.getBytesInternal();
+      checkArgument(
+          nextBytes.length == resultBytes.length, "All hashcodes must have the same bit length.");
       for (int i = 0; i < nextBytes.length; i++) {
         resultBytes[i] = (byte) (resultBytes[i] * 37 ^ nextBytes[i]);
       }
@@ -433,23 +697,23 @@ public final class Hashing {
   }
 
   /**
-   * Returns a hash code, having the same bit length as each of the input hash codes,
-   * that combines the information of these hash codes in an unordered fashion. That
-   * is, whenever two equal hash codes are produced by two calls to this method, it
-   * is <i>as likely as possible</i> that each was computed from the <i>same</i>
-   * input hash codes in <i>some</i> order.
+   * Returns a hash code, having the same bit length as each of the input hash codes, that combines
+   * the information of these hash codes in an unordered fashion. That is, whenever two equal hash
+   * codes are produced by two calls to this method, it is <i>as likely as possible</i> that each
+   * was computed from the <i>same</i> input hash codes in <i>some</i> order.
    *
-   * @throws IllegalArgumentException if {@code hashCodes} is empty, or the hash codes
-   *     do not all have the same bit length
+   * @throws IllegalArgumentException if {@code hashCodes} is empty, or the hash codes do not all
+   *     have the same bit length
    */
+  @J2ktIncompatible
   public static HashCode combineUnordered(Iterable<HashCode> hashCodes) {
     Iterator<HashCode> iterator = hashCodes.iterator();
     checkArgument(iterator.hasNext(), "Must be at least 1 hash code to combine.");
     byte[] resultBytes = new byte[iterator.next().bits() / 8];
     for (HashCode hashCode : hashCodes) {
-      byte[] nextBytes = hashCode.asBytes();
-      checkArgument(nextBytes.length == resultBytes.length,
-          "All hashcodes must have the same bit length.");
+      byte[] nextBytes = hashCode.getBytesInternal();
+      checkArgument(
+          nextBytes.length == resultBytes.length, "All hashcodes must have the same bit length.");
       for (int i = 0; i < nextBytes.length; i++) {
         resultBytes[i] += nextBytes[i];
       }
@@ -457,9 +721,7 @@ public final class Hashing {
     return HashCode.fromBytesNoCopy(resultBytes);
   }
 
-  /**
-   * Checks that the passed argument is positive, and ceils it to a multiple of 32.
-   */
+  /** Checks that the passed argument is positive, and ceils it to a multiple of 32. */
   static int checkPositiveAndMakeMultipleOf32(int bits) {
     checkArgument(bits > 0, "Number of bits must be positive");
     return (bits + 31) & ~31;
@@ -467,65 +729,64 @@ public final class Hashing {
 
   /**
    * Returns a hash function which computes its hash code by concatenating the hash codes of the
-   * underlying hash functions together. This can be useful if you need to generate hash codes
-   * of a specific length.
+   * underlying hash functions together. This can be useful if you need to generate hash codes of a
+   * specific length.
    *
-   * <p>For example, if you need 1024-bit hash codes, you could join two {@link Hashing#sha512}
-   * hash functions together: {@code Hashing.concatenating(Hashing.sha512(), Hashing.sha512())}.
+   * <p>For example, if you need 1024-bit hash codes, you could join two {@link Hashing#sha512} hash
+   * functions together: {@code Hashing.concatenating(Hashing.sha512(), Hashing.sha512())}.
    *
    * @since 19.0
    */
+  @J2ktIncompatible
   public static HashFunction concatenating(
       HashFunction first, HashFunction second, HashFunction... rest) {
     // We can't use Lists.asList() here because there's no hash->collect dependency
-    List<HashFunction> list = new ArrayList<HashFunction>();
+    List<HashFunction> list = new ArrayList<>();
     list.add(first);
     list.add(second);
-    for (HashFunction hashFunc : rest) {
-      list.add(hashFunc);
-    }
+    Collections.addAll(list, rest);
     return new ConcatenatedHashFunction(list.toArray(new HashFunction[0]));
   }
 
   /**
    * Returns a hash function which computes its hash code by concatenating the hash codes of the
-   * underlying hash functions together. This can be useful if you need to generate hash codes
-   * of a specific length.
+   * underlying hash functions together. This can be useful if you need to generate hash codes of a
+   * specific length.
    *
-   * <p>For example, if you need 1024-bit hash codes, you could join two {@link Hashing#sha512}
-   * hash functions together: {@code Hashing.concatenating(Hashing.sha512(), Hashing.sha512())}.
+   * <p>For example, if you need 1024-bit hash codes, you could join two {@link Hashing#sha512} hash
+   * functions together: {@code Hashing.concatenating(Hashing.sha512(), Hashing.sha512())}.
    *
    * @since 19.0
    */
+  @J2ktIncompatible
   public static HashFunction concatenating(Iterable<HashFunction> hashFunctions) {
     checkNotNull(hashFunctions);
     // We can't use Iterables.toArray() here because there's no hash->collect dependency
-    List<HashFunction> list = new ArrayList<HashFunction>();
+    List<HashFunction> list = new ArrayList<>();
     for (HashFunction hashFunction : hashFunctions) {
       list.add(hashFunction);
     }
-    checkArgument(list.size() > 0, "number of hash functions (%s) must be > 0", list.size());
+    checkArgument(!list.isEmpty(), "number of hash functions (%s) must be > 0", list.size());
     return new ConcatenatedHashFunction(list.toArray(new HashFunction[0]));
   }
 
+  @J2ktIncompatible
   private static final class ConcatenatedHashFunction extends AbstractCompositeHashFunction {
-    private final int bits;
 
     private ConcatenatedHashFunction(HashFunction... functions) {
       super(functions);
-      int bitSum = 0;
       for (HashFunction function : functions) {
-        bitSum += function.bits();
-        checkArgument(function.bits() % 8 == 0,
+        checkArgument(
+            function.bits() % 8 == 0,
             "the number of bits (%s) in hashFunction (%s) must be divisible by 8",
-            function.bits(), function);
+            function.bits(),
+            function);
       }
-      this.bits = bitSum;
     }
 
     @Override
     HashCode makeHash(Hasher[] hashers) {
-      byte[] bytes = new byte[bits / 8];
+      byte[] bytes = new byte[bits() / 8];
       int i = 0;
       for (Hasher hasher : hashers) {
         HashCode newHash = hasher.hash();
@@ -536,7 +797,11 @@ public final class Hashing {
 
     @Override
     public int bits() {
-      return bits;
+      int bitSum = 0;
+      for (HashFunction function : functions) {
+        bitSum += function.bits();
+      }
+      return bitSum;
     }
 
     @Override
@@ -550,24 +815,23 @@ public final class Hashing {
 
     @Override
     public int hashCode() {
-      return Arrays.hashCode(functions) * 31 + bits;
+      return Arrays.hashCode(functions);
     }
   }
 
   /**
-   * Linear CongruentialGenerator to use for consistent hashing.
-   * See http://en.wikipedia.org/wiki/Linear_congruential_generator
+   * Linear CongruentialGenerator to use for consistent hashing. See
+   * http://en.wikipedia.org/wiki/Linear_congruential_generator
    */
   private static final class LinearCongruentialGenerator {
-    private long state;
-
-    public LinearCongruentialGenerator(long seed) {
-      this.state = seed;
+    /** Generator state is managed by the caller to avoid unnecessary allocations. */
+    static long nextState(long state) {
+      return 2862933555777941757L * state + 1;
     }
 
-    public double nextDouble() {
-      state = 2862933555777941757L * state + 1;
-      return ((double) ((int) (state >>> 33) + 1)) / (0x1.0p31);
+    /** Generator state must be updated with {@link #nextState} before calling {@link #toDouble}. */
+    static double toDouble(long state) {
+      return ((double) ((int) (state >>> 33) + 1)) / 0x1.0p31;
     }
   }
 

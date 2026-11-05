@@ -16,13 +16,14 @@
 
 package com.google.common.collect.testing;
 
+import static com.google.common.collect.testing.Helpers.mapEntry;
 import static com.google.common.collect.testing.Helpers.orderEntriesByKey;
 
 import com.google.common.annotations.GwtCompatible;
-
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import org.jspecify.annotations.NullMarked;
 
 /**
  * Implementation helper for {@link TestMapGenerator} for use with enum maps.
@@ -30,24 +31,23 @@ import java.util.Map.Entry;
  * @author Kevin Bourrillion
  */
 @GwtCompatible
-public abstract class TestEnumMapGenerator
-    implements TestMapGenerator<AnEnum, String> {
+@NullMarked
+public abstract class TestEnumMapGenerator implements TestMapGenerator<AnEnum, String> {
 
   @Override
   public SampleElements<Entry<AnEnum, String>> samples() {
-    return new SampleElements<Entry<AnEnum, String>>(
-        Helpers.mapEntry(AnEnum.A, "January"),
-        Helpers.mapEntry(AnEnum.B, "February"),
-        Helpers.mapEntry(AnEnum.C, "March"),
-        Helpers.mapEntry(AnEnum.D, "April"),
-        Helpers.mapEntry(AnEnum.E, "May")
-    );
+    return new SampleElements<>(
+        mapEntry(AnEnum.A, "January"),
+        mapEntry(AnEnum.B, "February"),
+        mapEntry(AnEnum.C, "March"),
+        mapEntry(AnEnum.D, "April"),
+        mapEntry(AnEnum.E, "May"));
   }
 
   @Override
   public final Map<AnEnum, String> create(Object... entries) {
     @SuppressWarnings("unchecked")
-    Entry<AnEnum, String>[] array = new Entry[entries.length];
+    Entry<AnEnum, String>[] array = (Entry<AnEnum, String>[]) new Entry<?, ?>[entries.length];
     int i = 0;
     for (Object o : entries) {
       @SuppressWarnings("unchecked")
@@ -57,13 +57,12 @@ public abstract class TestEnumMapGenerator
     return create(array);
   }
 
-  protected abstract Map<AnEnum, String> create(
-      Entry<AnEnum, String>[] entries);
+  protected abstract Map<AnEnum, String> create(Entry<AnEnum, String>[] entries);
 
   @Override
   @SuppressWarnings("unchecked")
   public final Entry<AnEnum, String>[] createArray(int length) {
-    return new Entry[length];
+    return (Entry<AnEnum, String>[]) new Entry<?, ?>[length];
   }
 
   @Override
@@ -78,8 +77,7 @@ public abstract class TestEnumMapGenerator
 
   /** Returns the elements sorted in natural order. */
   @Override
-  public Iterable<Entry<AnEnum, String>> order(
-      List<Entry<AnEnum, String>> insertionOrder) {
+  public Iterable<Entry<AnEnum, String>> order(List<Entry<AnEnum, String>> insertionOrder) {
     return orderEntriesByKey(insertionOrder);
   }
 }

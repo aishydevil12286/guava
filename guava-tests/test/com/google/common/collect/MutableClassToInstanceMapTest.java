@@ -16,129 +16,111 @@
 
 package com.google.common.collect;
 
-import com.google.common.collect.ImmutableClassToInstanceMapTest.TestClassToInstanceMapGenerator;
+import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertThrows;
+
+import com.google.common.collect.ClassToInstanceMapTesting.Impl;
+import com.google.common.collect.ClassToInstanceMapTesting.TestClassToInstanceMapGenerator;
 import com.google.common.collect.testing.MapTestSuiteBuilder;
 import com.google.common.collect.testing.features.CollectionFeature;
 import com.google.common.collect.testing.features.CollectionSize;
 import com.google.common.collect.testing.features.MapFeature;
-import com.google.common.collect.testing.testers.MapPutTester;
-
+import java.util.Map;
+import java.util.Map.Entry;
 import junit.framework.Test;
 import junit.framework.TestCase;
 import junit.framework.TestSuite;
-
-import java.lang.reflect.Method;
-import java.util.Map;
-import java.util.Map.Entry;
+import org.jspecify.annotations.NullUnmarked;
 
 /**
  * Unit test of {@link MutableClassToInstanceMap}.
  *
  * @author Kevin Bourrillion
  */
+@NullUnmarked
 public class MutableClassToInstanceMapTest extends TestCase {
+  @AndroidIncompatible // test-suite builders
   public static Test suite() {
     TestSuite suite = new TestSuite();
     suite.addTestSuite(MutableClassToInstanceMapTest.class);
 
-    // Suppress this one because the tester framework doesn't understand that
-    // *some* remappings will be allowed and others not.
-    Method remapTest = null;
-    try {
-      remapTest = MapPutTester.class.getMethod(
-          "testPut_replaceNullValueWithNonNullSupported");
-    } catch (NoSuchMethodException e) {
-      throw new AssertionError();
-    }
-
-    suite.addTest(MapTestSuiteBuilder
-        .using(new TestClassToInstanceMapGenerator() {
-          // Other tests will verify what real, warning-free usage looks like
-          // but here we have to do some serious fudging
-          @Override
-          @SuppressWarnings("unchecked")
-          public Map<Class, Number> create(Object... elements) {
-            MutableClassToInstanceMap<Number> map
-                = MutableClassToInstanceMap.create();
-            for (Object object : elements) {
-              Entry<Class, Number> entry = (Entry<Class, Number>) object;
-              map.putInstance(entry.getKey(), entry.getValue());
-            }
-            return (Map) map;
-          }
-        })
-        .named("MutableClassToInstanceMap")
-        .withFeatures(
-            MapFeature.GENERAL_PURPOSE,
-            MapFeature.RESTRICTS_KEYS,
-            MapFeature.ALLOWS_NULL_VALUES,
-            CollectionSize.ANY,
-            CollectionFeature.SUPPORTS_ITERATOR_REMOVE,
-            MapFeature.ALLOWS_ANY_NULL_QUERIES)
-        .suppressing(remapTest)
-        .createTestSuite());
+    suite.addTest(
+        MapTestSuiteBuilder.using(
+                new TestClassToInstanceMapGenerator() {
+                  // Other tests will verify what real, warning-free usage looks like
+                  // but here we have to do some serious fudging
+                  @Override
+                  @SuppressWarnings({"unchecked", "rawtypes"})
+                  public Map<Class<?>, Impl> create(Object... elements) {
+                    MutableClassToInstanceMap<Impl> map = MutableClassToInstanceMap.create();
+                    for (Object object : elements) {
+                      Entry<?, ?> entry = (Entry<?, ?>) object;
+                      map.putInstance((Class) entry.getKey(), (Impl) entry.getValue());
+                    }
+                    return (Map) map;
+                  }
+                })
+            .named("MutableClassToInstanceMap")
+            .withFeatures(
+                MapFeature.GENERAL_PURPOSE,
+                MapFeature.RESTRICTS_KEYS,
+                MapFeature.ALLOWS_NULL_VALUES,
+                CollectionSize.ANY,
+                CollectionFeature.SERIALIZABLE,
+                CollectionFeature.SUPPORTS_ITERATOR_REMOVE,
+                MapFeature.ALLOWS_ANY_NULL_QUERIES)
+            .createTestSuite());
 
     return suite;
   }
 
   private ClassToInstanceMap<Number> map;
 
-  @Override protected void setUp() throws Exception {
+  @Override
+  protected void setUp() {
     map = MutableClassToInstanceMap.create();
   }
 
   public void testConstraint() {
-
-    /**
-     * We'll give ourselves a pass on testing all the possible ways of
-     * breaking the constraint, because we know that newClassMap() is
-     * implemented using ConstrainedMap which is itself well-tested.
-     * A purist would object to this, but what can I say, we're dirty
-     * cheaters.
+    /*
+     * We'll give ourselves a pass on testing all the possible ways of breaking the constraint,
+     * because we know that newClassMap() is implemented using ConstrainedMap which is itself
+     * well-tested. A purist would object to this, but what can I say, we're dirty cheaters.
      */
-
-    map.put(Integer.class, new Integer(5));
-    try {
-      map.put(Double.class, new Long(42));
-      fail();
-    } catch (ClassCastException expected) {
-    }
+    map.put(Integer.class, 5);
+    assertThrows(ClassCastException.class, () -> map.put(Double.class, 42L));
     // Won't compile: map.put(String.class, "x");
   }
 
   public void testPutAndGetInstance() {
-    assertNull(map.putInstance(Integer.class, new Integer(5)));
+    assertThat(map.putInstance(Integer.class, 5)).isNull();
 
-    Integer oldValue = map.putInstance(Integer.class, new Integer(7));
+    Integer oldValue = map.putInstance(Integer.class, 7);
     assertEquals(5, (int) oldValue);
 
     Integer newValue = map.getInstance(Integer.class);
     assertEquals(7, (int) newValue);
 
-    // Won't compile: map.putInstance(Double.class, new Long(42));
+    // Won't compile: map.putInstance(Double.class, 42L);
   }
 
   public void testNull() {
-    try {
-      map.put(null, new Integer(1));
-      fail();
-    } catch (NullPointerException expected) {
-    }
+    assertThrows(NullPointerException.class, () -> map.put(null, 1));
     map.putInstance(Integer.class, null);
-    assertNull(map.get(Integer.class));
-    assertNull(map.getInstance(Integer.class));
+    assertThat(map.get(Integer.class)).isNull();
+    assertThat(map.getInstance(Integer.class)).isNull();
 
     map.put(Long.class, null);
-    assertNull(map.get(Long.class));
-    assertNull(map.getInstance(Long.class));
+    assertThat(map.get(Long.class)).isNull();
+    assertThat(map.getInstance(Long.class)).isNull();
   }
 
   public void testPrimitiveAndWrapper() {
-    assertNull(map.getInstance(int.class));
-    assertNull(map.getInstance(Integer.class));
+    assertThat(map.getInstance(int.class)).isNull();
+    assertThat(map.getInstance(Integer.class)).isNull();
 
-    assertNull(map.putInstance(int.class, 0));
-    assertNull(map.putInstance(Integer.class, 1));
+    assertThat(map.putInstance(int.class, 0)).isNull();
+    assertThat(map.putInstance(Integer.class, 1)).isNull();
     assertEquals(2, map.size());
 
     assertEquals(0, (int) map.getInstance(int.class));
@@ -147,8 +129,8 @@ public class MutableClassToInstanceMapTest extends TestCase {
     assertEquals(0, (int) map.putInstance(int.class, null));
     assertEquals(1, (int) map.putInstance(Integer.class, null));
 
-    assertNull(map.getInstance(int.class));
-    assertNull(map.getInstance(Integer.class));
+    assertThat(map.getInstance(int.class)).isNull();
+    assertThat(map.getInstance(Integer.class)).isNull();
     assertEquals(2, map.size());
   }
 }

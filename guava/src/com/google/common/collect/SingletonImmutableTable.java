@@ -19,7 +19,8 @@ package com.google.common.collect;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.annotations.GwtCompatible;
-
+import com.google.common.annotations.GwtIncompatible;
+import com.google.common.annotations.J2ktIncompatible;
 import java.util.Map;
 
 /**
@@ -28,7 +29,7 @@ import java.util.Map;
  * @author Gregory Kick
  */
 @GwtCompatible
-class SingletonImmutableTable<R, C, V> extends ImmutableTable<R, C, V> {
+final class SingletonImmutableTable<R, C, V> extends ImmutableTable<R, C, V> {
   final R singleRowKey;
   final C singleColumnKey;
   final V singleValue;
@@ -43,34 +44,43 @@ class SingletonImmutableTable<R, C, V> extends ImmutableTable<R, C, V> {
     this(cell.getRowKey(), cell.getColumnKey(), cell.getValue());
   }
 
-  @Override public ImmutableMap<R, V> column(C columnKey) {
+  @Override
+  public ImmutableMap<R, V> column(C columnKey) {
     checkNotNull(columnKey);
     return containsColumn(columnKey)
         ? ImmutableMap.of(singleRowKey, singleValue)
-        : ImmutableMap.<R, V>of();
+        : ImmutableMap.of();
   }
 
-  @Override public ImmutableMap<C, Map<R, V>> columnMap() {
-    return ImmutableMap.of(singleColumnKey,
-        (Map<R, V>) ImmutableMap.of(singleRowKey, singleValue));
+  @Override
+  public ImmutableMap<C, Map<R, V>> columnMap() {
+    return ImmutableMap.of(singleColumnKey, ImmutableMap.of(singleRowKey, singleValue));
   }
 
-  @Override public ImmutableMap<R, Map<C, V>> rowMap() {
-    return ImmutableMap.of(singleRowKey,
-        (Map<C, V>) ImmutableMap.of(singleColumnKey, singleValue));
+  @Override
+  public ImmutableMap<R, Map<C, V>> rowMap() {
+    return ImmutableMap.of(singleRowKey, ImmutableMap.of(singleColumnKey, singleValue));
   }
 
-  @Override public int size() {
+  @Override
+  public int size() {
     return 1;
   }
 
   @Override
-  ImmutableSet<Cell<R, C, V>> createCellSet() {
-    return ImmutableSet.of(
-        cellOf(singleRowKey, singleColumnKey, singleValue));
+  public ImmutableSet<Cell<R, C, V>> cellSet() {
+    return ImmutableSet.of(cellOf(singleRowKey, singleColumnKey, singleValue));
   }
 
-  @Override ImmutableCollection<V> createValues() {
+  @Override
+  public ImmutableCollection<V> values() {
     return ImmutableSet.of(singleValue);
+  }
+
+  @Override
+  @J2ktIncompatible
+  @GwtIncompatible
+    Object writeReplace() {
+    return SerializedForm.create(this, new int[] {0}, new int[] {0});
   }
 }

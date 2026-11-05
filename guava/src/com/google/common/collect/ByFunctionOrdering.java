@@ -19,52 +19,54 @@ package com.google.common.collect;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.annotations.GwtCompatible;
+import com.google.common.annotations.GwtIncompatible;
+import com.google.common.annotations.J2ktIncompatible;
 import com.google.common.base.Function;
-import com.google.common.base.Objects;
-
 import java.io.Serializable;
-
-import javax.annotation.Nullable;
+import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 /**
- * An ordering that orders elements by applying an order to the result of a
- * function on those elements.
+ * An ordering that orders elements by applying an order to the result of a function on those
+ * elements.
  */
-@GwtCompatible(serializable = true)
-final class ByFunctionOrdering<F, T>
+@GwtCompatible
+final class ByFunctionOrdering<F extends @Nullable Object, T extends @Nullable Object>
     extends Ordering<F> implements Serializable {
   final Function<F, ? extends T> function;
   final Ordering<T> ordering;
 
-  ByFunctionOrdering(
-      Function<F, ? extends T> function, Ordering<T> ordering) {
+  ByFunctionOrdering(Function<F, ? extends T> function, Ordering<T> ordering) {
     this.function = checkNotNull(function);
     this.ordering = checkNotNull(ordering);
   }
 
-  @Override public int compare(F left, F right) {
+  @Override
+  public int compare(@ParametricNullness F left, @ParametricNullness F right) {
     return ordering.compare(function.apply(left), function.apply(right));
   }
 
-  @Override public boolean equals(@Nullable Object object) {
+  @Override
+  public boolean equals(@Nullable Object object) {
     if (object == this) {
       return true;
     }
     if (object instanceof ByFunctionOrdering) {
       ByFunctionOrdering<?, ?> that = (ByFunctionOrdering<?, ?>) object;
-      return this.function.equals(that.function)
-          && this.ordering.equals(that.ordering);
+      return this.function.equals(that.function) && this.ordering.equals(that.ordering);
     }
     return false;
   }
 
-  @Override public int hashCode() {
-    return Objects.hashCode(function, ordering);
+  @Override
+  public int hashCode() {
+    return Objects.hash(function, ordering);
   }
 
-  @Override public String toString() {
+  @Override
+  public String toString() {
     return ordering + ".onResultOf(" + function + ")";
   }
 
-  private static final long serialVersionUID = 0;
+  @GwtIncompatible @J2ktIncompatible private static final long serialVersionUID = 0;
 }

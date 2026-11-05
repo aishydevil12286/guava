@@ -16,15 +16,18 @@
 
 package com.google.common.collect.testing.features;
 
-import com.google.common.annotations.GwtCompatible;
-import com.google.common.collect.testing.Helpers;
+import static com.google.common.collect.testing.Helpers.copyToSet;
+import static java.util.Collections.emptySet;
 
-import java.util.Collections;
+import com.google.common.annotations.GwtCompatible;
+import com.google.common.annotations.GwtIncompatible;
+import com.google.common.annotations.J2ktIncompatible;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 
 /**
- * Encapsulates the constraints that a class under test must satisfy in order
- * for a tester method to be run against that class.
+ * Encapsulates the constraints that a class under test must satisfy in order for a tester method to
+ * be run against that class.
  *
  * @author George van den Driessche
  */
@@ -33,10 +36,9 @@ public final class TesterRequirements {
   private final Set<Feature<?>> presentFeatures;
   private final Set<Feature<?>> absentFeatures;
 
-  public TesterRequirements(
-      Set<Feature<?>> presentFeatures, Set<Feature<?>> absentFeatures) {
-    this.presentFeatures = Helpers.copyToSet(presentFeatures);
-    this.absentFeatures = Helpers.copyToSet(absentFeatures);
+  public TesterRequirements(Set<Feature<?>> presentFeatures, Set<Feature<?>> absentFeatures) {
+    this.presentFeatures = copyToSet(presentFeatures);
+    this.absentFeatures = copyToSet(absentFeatures);
   }
 
   public TesterRequirements(TesterRequirements tr) {
@@ -44,19 +46,19 @@ public final class TesterRequirements {
   }
 
   public TesterRequirements() {
-    this(Collections.<Feature<?>>emptySet(),
-        Collections.<Feature<?>>emptySet());
+    this(emptySet(), emptySet());
   }
 
-  public final Set<Feature<?>> getPresentFeatures() {
+  public Set<Feature<?>> getPresentFeatures() {
     return presentFeatures;
   }
 
-  public final Set<Feature<?>> getAbsentFeatures() {
+  public Set<Feature<?>> getAbsentFeatures() {
     return absentFeatures;
   }
 
-  @Override public boolean equals(Object object) {
+  @Override
+  public boolean equals(@Nullable Object object) {
     if (object == this) {
       return true;
     }
@@ -68,14 +70,15 @@ public final class TesterRequirements {
     return false;
   }
 
-  @Override public int hashCode() {
+  @Override
+  public int hashCode() {
     return presentFeatures.hashCode() * 31 + absentFeatures.hashCode();
   }
 
-  @Override public String toString() {
-    return "{TesterRequirements: present="
-        + presentFeatures + ", absent=" + absentFeatures + "}";
+  @Override
+  public String toString() {
+    return "{TesterRequirements: present=" + presentFeatures + ", absent=" + absentFeatures + "}";
   }
 
-  private static final long serialVersionUID = 0;
+  @GwtIncompatible @J2ktIncompatible private static final long serialVersionUID = 0;
 }

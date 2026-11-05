@@ -1,25 +1,23 @@
 /*
  * Copyright (C) 2014 The Guava Authors
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License. You may obtain a copy of the License at
  *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software distributed under the License
+ * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+ * or implied. See the License for the specific language governing permissions and limitations under
+ * the License.
  */
 
 package com.google.common.eventbus;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static java.util.Objects.requireNonNull;
 
-import com.google.common.collect.Queues;
-
+import java.util.ArrayDeque;
 import java.util.Iterator;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -51,10 +49,10 @@ abstract class Dispatcher {
   }
 
   /**
-   * Returns a dispatcher that queues events that are posted in a single global queue. This
-   * behavior matches the original behavior of AsyncEventBus exactly, but is otherwise not
-   * especially useful. For async dispatch, an {@linkplain #immediate() immediate} dispatcher
-   * should generally be preferable.
+   * Returns a dispatcher that queues events that are posted in a single global queue. This behavior
+   * matches the original behavior of AsyncEventBus exactly, but is otherwise not especially useful.
+   * For async dispatch, an {@linkplain #immediate() immediate} dispatcher should generally be
+   * preferable.
    */
   static Dispatcher legacyAsync() {
     return new LegacyAsyncDispatcher();
@@ -69,32 +67,26 @@ abstract class Dispatcher {
     return ImmediateDispatcher.INSTANCE;
   }
 
-  /**
-   * Dispatches the given {@code event} to the given {@code subscribers}.
-   */
+  /** Dispatches the given {@code event} to the given {@code subscribers}. */
   abstract void dispatch(Object event, Iterator<Subscriber> subscribers);
 
-  /**
-   * Implementation of a {@link #perThreadDispatchQueue()} dispatcher.
-   */
+  /** Implementation of a {@link #perThreadDispatchQueue()} dispatcher. */
   private static final class PerThreadQueuedDispatcher extends Dispatcher {
 
     // This dispatcher matches the original dispatch behavior of EventBus.
 
-    /**
-     * Per-thread queue of events to dispatch.
-     */
+    /** Per-thread queue of events to dispatch. */
+    @SuppressWarnings("ThreadLocalUsage") // Each Dispatcher needs its own state.
     private final ThreadLocal<Queue<Event>> queue =
         new ThreadLocal<Queue<Event>>() {
           @Override
           protected Queue<Event> initialValue() {
-            return Queues.newArrayDeque();
+            return new ArrayDeque<>();
           }
         };
 
-    /**
-     * Per-thread dispatch state, used to avoid reentrant event dispatching.
-     */
+    /** Per-thread dispatch state, used to avoid reentrant event dispatching. */
+    @SuppressWarnings("ThreadLocalUsage") // Each Dispatcher needs its own state.
     private final ThreadLocal<Boolean> dispatching =
         new ThreadLocal<Boolean>() {
           @Override
@@ -107,7 +99,8 @@ abstract class Dispatcher {
     void dispatch(Object event, Iterator<Subscriber> subscribers) {
       checkNotNull(event);
       checkNotNull(subscribers);
-      Queue<Event> queueForThread = queue.get();
+      // requireNonNull accommodates Android's @RecentlyNullable annotation on ThreadLocal.get
+      Queue<Event> queueForThread = requireNonNull(queue.get());
       queueForThread.offer(new Event(event, subscribers));
 
       if (!dispatching.get()) {
@@ -137,15 +130,13 @@ abstract class Dispatcher {
     }
   }
 
-  /**
-   * Implementation of a {@link #legacyAsync()} dispatcher.
-   */
+  /** Implementation of a {@link #legacyAsync()} dispatcher. */
   private static final class LegacyAsyncDispatcher extends Dispatcher {
 
     // This dispatcher matches the original dispatch behavior of AsyncEventBus.
     //
     // We can't really make any guarantees about the overall dispatch order for this dispatcher in
-    // a multithreaded environment for a couple reasons:
+    // a multithreaded environment for a couple of reasons:
     //
     // 1. Subscribers to events posted on different threads can be interleaved with each other
     //    freely. (A event on one thread, B event on another could yield any of
@@ -160,11 +151,8 @@ abstract class Dispatcher {
     // probably provide a stronger order guarantee, though that order would obviously be different
     // in some cases.
 
-    /**
-     * Global event queue.
-     */
-    private final ConcurrentLinkedQueue<EventWithSubscriber> queue =
-        Queues.newConcurrentLinkedQueue();
+    /** Global event queue. */
+    private final ConcurrentLinkedQueue<EventWithSubscriber> queue = new ConcurrentLinkedQueue<>();
 
     @Override
     void dispatch(Object event, Iterator<Subscriber> subscribers) {
@@ -190,9 +178,7 @@ abstract class Dispatcher {
     }
   }
 
-  /**
-   * Implementation of {@link #immediate()}.
-   */
+  /** Implementation of {@link #immediate()}. */
   private static final class ImmediateDispatcher extends Dispatcher {
     private static final ImmediateDispatcher INSTANCE = new ImmediateDispatcher();
 

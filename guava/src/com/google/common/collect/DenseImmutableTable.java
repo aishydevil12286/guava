@@ -14,100 +14,112 @@
 
 package com.google.common.collect;
 
-import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.collect.Maps.immutableEntry;
+import static com.google.common.collect.Maps.indexMap;
+import static java.util.Objects.requireNonNull;
 
 import com.google.common.annotations.GwtCompatible;
+import com.google.common.annotations.GwtIncompatible;
+import com.google.common.annotations.J2ktIncompatible;
 import com.google.common.collect.ImmutableMap.IteratorBasedImmutableMap;
-
+import com.google.errorprone.annotations.Immutable;
+import com.google.j2objc.annotations.WeakOuter;
 import java.util.Map;
-import java.util.Map.Entry;
+import org.jspecify.annotations.Nullable;
 
-import javax.annotation.Nullable;
-import javax.annotation.concurrent.Immutable;
-
-/**
- * A {@code RegularImmutableTable} optimized for dense data.
- */
+/** A {@code RegularImmutableTable} optimized for dense data. */
 @GwtCompatible
-@Immutable
-final class DenseImmutableTable<R, C, V>
-    extends RegularImmutableTable<R, C, V> {
+@Immutable(containerOf = {"R", "C", "V"})
+final class DenseImmutableTable<R, C, V> extends RegularImmutableTable<R, C, V> {
   private final ImmutableMap<R, Integer> rowKeyToIndex;
   private final ImmutableMap<C, Integer> columnKeyToIndex;
-  private final ImmutableMap<R, Map<C, V>> rowMap;
-  private final ImmutableMap<C, Map<R, V>> columnMap;
-  private final int[] rowCounts;
-  private final int[] columnCounts;
-  private final V[][] values;
-  private final int[] iterationOrderRow;
-  private final int[] iterationOrderColumn;
+  private final ImmutableMap<R, ImmutableMap<C, V>> rowMap;
+  private final ImmutableMap<C, ImmutableMap<R, V>> columnMap;
 
-  DenseImmutableTable(ImmutableList<Cell<R, C, V>> cellList,
-      ImmutableSet<R> rowSpace, ImmutableSet<C> columnSpace) {
+  @SuppressWarnings("Immutable") // We don't modify this after construction.
+  private final int[] rowCounts;
+
+  @SuppressWarnings("Immutable") // We don't modify this after construction.
+  private final int[] columnCounts;
+
+  @SuppressWarnings("Immutable") // We don't modify this after construction.
+  private final @Nullable V[][] values;
+
+  // For each cell in iteration order, the index of that cell's row key in the row key list.
+  @SuppressWarnings("Immutable") // We don't modify this after construction.
+  private final int[] cellRowIndices;
+
+  // For each cell in iteration order, the index of that cell's column key in the column key list.
+  @SuppressWarnings("Immutable") // We don't modify this after construction.
+  private final int[] cellColumnIndices;
+
+  DenseImmutableTable(
+      ImmutableList<Cell<R, C, V>> cellList,
+      ImmutableSet<R> rowSpace,
+      ImmutableSet<C> columnSpace) {
     @SuppressWarnings("unchecked")
-    V[][] array = (V[][]) new Object[rowSpace.size()][columnSpace.size()];
+    @Nullable V[][] array = (@Nullable V[][]) new Object[rowSpace.size()][columnSpace.size()];
     this.values = array;
-    this.rowKeyToIndex = Maps.indexMap(rowSpace);
-    this.columnKeyToIndex = Maps.indexMap(columnSpace);
+    this.rowKeyToIndex = indexMap(rowSpace);
+    this.columnKeyToIndex = indexMap(columnSpace);
     rowCounts = new int[rowKeyToIndex.size()];
     columnCounts = new int[columnKeyToIndex.size()];
-    int[] iterationOrderRow = new int[cellList.size()];
-    int[] iterationOrderColumn = new int[cellList.size()];
+    int[] cellRowIndices = new int[cellList.size()];
+    int[] cellColumnIndices = new int[cellList.size()];
     for (int i = 0; i < cellList.size(); i++) {
       Cell<R, C, V> cell = cellList.get(i);
       R rowKey = cell.getRowKey();
       C columnKey = cell.getColumnKey();
-      int rowIndex = rowKeyToIndex.get(rowKey);
-      int columnIndex = columnKeyToIndex.get(columnKey);
+      // The requireNonNull calls are safe because we construct the indexes with indexMap.
+      int rowIndex = requireNonNull(rowKeyToIndex.get(rowKey));
+      int columnIndex = requireNonNull(columnKeyToIndex.get(columnKey));
       V existingValue = values[rowIndex][columnIndex];
-      checkArgument(existingValue == null, "duplicate key: (%s, %s)", rowKey, columnKey);
+      checkNoDuplicate(rowKey, columnKey, existingValue, cell.getValue());
       values[rowIndex][columnIndex] = cell.getValue();
       rowCounts[rowIndex]++;
       columnCounts[columnIndex]++;
-      iterationOrderRow[i] = rowIndex;
-      iterationOrderColumn[i] = columnIndex;
+      cellRowIndices[i] = rowIndex;
+      cellColumnIndices[i] = columnIndex;
     }
-    this.iterationOrderRow = iterationOrderRow;
-    this.iterationOrderColumn = iterationOrderColumn;
+    this.cellRowIndices = cellRowIndices;
+    this.cellColumnIndices = cellColumnIndices;
     this.rowMap = new RowMap();
     this.columnMap = new ColumnMap();
   }
 
-  /**
-   * An immutable map implementation backed by an indexed nullable array.
-   */
+  /** An immutable map implementation backed by an indexed nullable array. */
   private abstract static class ImmutableArrayMap<K, V> extends IteratorBasedImmutableMap<K, V> {
     private final int size;
-  
+
     ImmutableArrayMap(int size) {
       this.size = size;
     }
-  
+
     abstract ImmutableMap<K, Integer> keyToIndex();
-  
+
     // True if getValue never returns null.
     private boolean isFull() {
       return size == keyToIndex().size();
     }
-  
-    K getKey(int index) {
+
+    final K getKey(int index) {
       return keyToIndex().keySet().asList().get(index);
     }
-  
-    @Nullable abstract V getValue(int keyIndex);
-  
+
+    abstract @Nullable V getValue(int keyIndex);
+
     @Override
     ImmutableSet<K> createKeySet() {
       return isFull() ? keyToIndex().keySet() : super.createKeySet();
     }
-  
+
     @Override
-    public int size() {
+    public final int size() {
       return size;
     }
-  
+
     @Override
-    public V get(@Nullable Object key) {
+    public final @Nullable V get(@Nullable Object key) {
       Integer keyIndex = keyToIndex().get(key);
       return (keyIndex == null) ? null : getValue(keyIndex);
     }
@@ -115,21 +127,30 @@ final class DenseImmutableTable<R, C, V>
     @Override
     UnmodifiableIterator<Entry<K, V>> entryIterator() {
       return new AbstractIterator<Entry<K, V>>() {
-        private int index = -1;
-        private final int maxIndex = keyToIndex().size();
+        int index = -1;
+        final int maxIndex = keyToIndex().size();
 
         @Override
-        protected Entry<K, V> computeNext() {
+        protected @Nullable Entry<K, V> computeNext() {
           for (index++; index < maxIndex; index++) {
             V value = getValue(index);
             if (value != null) {
-              return Maps.immutableEntry(getKey(index), value);
+              return immutableEntry(getKey(index), value);
             }
           }
           return endOfData();
         }
       };
-        }
+    }
+
+    // redeclare to help optimizers with b/310253115
+    @SuppressWarnings("RedundantOverride")
+    @J2ktIncompatible // serialization
+    @Override
+    @GwtIncompatible // serialization
+    Object writeReplace() {
+      return super.writeReplace();
+    }
   }
 
   private final class Row extends ImmutableArrayMap<C, V> {
@@ -146,13 +167,22 @@ final class DenseImmutableTable<R, C, V>
     }
 
     @Override
-    V getValue(int keyIndex) {
+    @Nullable V getValue(int keyIndex) {
       return values[rowIndex][keyIndex];
     }
 
     @Override
     boolean isPartialView() {
       return true;
+    }
+
+    // redeclare to help optimizers with b/310253115
+    @SuppressWarnings("RedundantOverride")
+    @Override
+    @J2ktIncompatible
+    @GwtIncompatible
+        Object writeReplace() {
+      return super.writeReplace();
     }
   }
 
@@ -170,7 +200,7 @@ final class DenseImmutableTable<R, C, V>
     }
 
     @Override
-    V getValue(int keyIndex) {
+    @Nullable V getValue(int keyIndex) {
       return values[keyIndex][columnIndex];
     }
 
@@ -178,9 +208,19 @@ final class DenseImmutableTable<R, C, V>
     boolean isPartialView() {
       return true;
     }
+
+    // redeclare to help optimizers with b/310253115
+    @SuppressWarnings("RedundantOverride")
+    @Override
+    @J2ktIncompatible
+    @GwtIncompatible
+        Object writeReplace() {
+      return super.writeReplace();
+    }
   }
 
-  private final class RowMap extends ImmutableArrayMap<R, Map<C, V>> {
+  @WeakOuter
+  private final class RowMap extends ImmutableArrayMap<R, ImmutableMap<C, V>> {
     private RowMap() {
       super(rowCounts.length);
     }
@@ -191,7 +231,7 @@ final class DenseImmutableTable<R, C, V>
     }
 
     @Override
-    Map<C, V> getValue(int keyIndex) {
+    ImmutableMap<C, V> getValue(int keyIndex) {
       return new Row(keyIndex);
     }
 
@@ -199,9 +239,19 @@ final class DenseImmutableTable<R, C, V>
     boolean isPartialView() {
       return false;
     }
+
+    // redeclare to help optimizers with b/310253115
+    @SuppressWarnings("RedundantOverride")
+    @Override
+    @J2ktIncompatible
+    @GwtIncompatible
+        Object writeReplace() {
+      return super.writeReplace();
+    }
   }
 
-  private final class ColumnMap extends ImmutableArrayMap<C, Map<R, V>> {
+  @WeakOuter
+  private final class ColumnMap extends ImmutableArrayMap<C, ImmutableMap<R, V>> {
     private ColumnMap() {
       super(columnCounts.length);
     }
@@ -212,7 +262,7 @@ final class DenseImmutableTable<R, C, V>
     }
 
     @Override
-    Map<R, V> getValue(int keyIndex) {
+    ImmutableMap<R, V> getValue(int keyIndex) {
       return new Column(keyIndex);
     }
 
@@ -220,42 +270,62 @@ final class DenseImmutableTable<R, C, V>
     boolean isPartialView() {
       return false;
     }
+
+    // redeclare to help optimizers with b/310253115
+    @SuppressWarnings("RedundantOverride")
+    @Override
+    @J2ktIncompatible
+    @GwtIncompatible
+        Object writeReplace() {
+      return super.writeReplace();
+    }
   }
 
-  @Override public ImmutableMap<C, Map<R, V>> columnMap() {
-    return columnMap;
+  @Override
+  public ImmutableMap<C, Map<R, V>> columnMap() {
+    // Casts without copying.
+    return ImmutableMap.copyOf(columnMap);
   }
 
   @Override
   public ImmutableMap<R, Map<C, V>> rowMap() {
-    return rowMap;
+    // Casts without copying.
+    return ImmutableMap.copyOf(rowMap);
   }
 
-  @Override public V get(@Nullable Object rowKey,
-      @Nullable Object columnKey) {
+  @Override
+  public @Nullable V get(@Nullable Object rowKey, @Nullable Object columnKey) {
     Integer rowIndex = rowKeyToIndex.get(rowKey);
     Integer columnIndex = columnKeyToIndex.get(columnKey);
-    return ((rowIndex == null) || (columnIndex == null)) ? null
-        : values[rowIndex][columnIndex];
+    return ((rowIndex == null) || (columnIndex == null)) ? null : values[rowIndex][columnIndex];
   }
 
   @Override
   public int size() {
-    return iterationOrderRow.length;
+    return cellRowIndices.length;
   }
 
   @Override
   Cell<R, C, V> getCell(int index) {
-    int rowIndex = iterationOrderRow[index];
-    int columnIndex = iterationOrderColumn[index];
+    int rowIndex = cellRowIndices[index];
+    int columnIndex = cellColumnIndices[index];
     R rowKey = rowKeySet().asList().get(rowIndex);
     C columnKey = columnKeySet().asList().get(columnIndex);
-    V value = values[rowIndex][columnIndex];
+    // requireNonNull is safe because we use indexes that were populated by the constructor.
+    V value = requireNonNull(values[rowIndex][columnIndex]);
     return cellOf(rowKey, columnKey, value);
   }
 
   @Override
   V getValue(int index) {
-    return values[iterationOrderRow[index]][iterationOrderColumn[index]];
+    // requireNonNull is safe because we use indexes that were populated by the constructor.
+    return requireNonNull(values[cellRowIndices[index]][cellColumnIndices[index]]);
+  }
+
+  @Override
+  @J2ktIncompatible
+  @GwtIncompatible
+    Object writeReplace() {
+    return SerializedForm.create(this, cellRowIndices, cellColumnIndices);
   }
 }

@@ -16,14 +16,14 @@
 
 package com.google.common.collect.testing.testers;
 
+import static com.google.common.collect.testing.Helpers.getMethod;
 import static com.google.common.collect.testing.features.CollectionFeature.ALLOWS_NULL_VALUES;
 
 import com.google.common.annotations.GwtCompatible;
 import com.google.common.annotations.GwtIncompatible;
-import com.google.common.collect.testing.Helpers;
+import com.google.common.annotations.J2ktIncompatible;
 import com.google.common.collect.testing.features.CollectionFeature;
 import com.google.common.collect.testing.features.CollectionSize;
-
 import java.lang.reflect.Method;
 import java.util.Collection;
 
@@ -32,16 +32,17 @@ import java.util.Collection;
  *
  * @author George van den Driessche
  */
-@GwtCompatible(emulated = true)
+@GwtCompatible
 public class SetHashCodeTester<E> extends AbstractSetTester<E> {
   public void testHashCode() {
     int expectedHashCode = 0;
     for (E element : getSampleElements()) {
-      expectedHashCode += ((element == null) ? 0 : element.hashCode());
+      expectedHashCode += (element == null) ? 0 : element.hashCode();
     }
     assertEquals(
         "A Set's hashCode() should be the sum of those of its elements.",
-        expectedHashCode, getSet().hashCode());
+        expectedHashCode,
+        getSet().hashCode());
   }
 
   @CollectionSize.Require(absent = CollectionSize.ZERO)
@@ -50,7 +51,7 @@ public class SetHashCodeTester<E> extends AbstractSetTester<E> {
     Collection<E> elements = getSampleElements(getNumElements() - 1);
     int expectedHashCode = 0;
     for (E element : elements) {
-      expectedHashCode += ((element == null) ? 0 : element.hashCode());
+      expectedHashCode += (element == null) ? 0 : element.hashCode();
     }
 
     elements.add(null);
@@ -58,19 +59,21 @@ public class SetHashCodeTester<E> extends AbstractSetTester<E> {
     assertEquals(
         "A Set's hashCode() should be the sum of those of its elements (with "
             + "a null element counting as having a hash of zero).",
-        expectedHashCode, getSet().hashCode());
+        expectedHashCode,
+        getSet().hashCode());
   }
 
   /**
-   * Returns the {@link Method} instances for the test methods in this class
-   * which call {@code hashCode()} on the set values so that set tests on
-   * unhashable objects can suppress it with
+   * Returns the {@link Method} instances for the test methods in this class which call {@code
+   * hashCode()} on the set values so that set tests on unhashable objects can suppress it with
    * {@code FeatureSpecificTestSuiteBuilder.suppressing()}.
    */
-  @GwtIncompatible("reflection")
+  @J2ktIncompatible
+  @GwtIncompatible // reflection
   public static Method[] getHashCodeMethods() {
-    return new Method[]{
-        Helpers.getMethod(SetHashCodeTester.class, "testHashCode"),
-        Helpers.getMethod(SetHashCodeTester.class, "testHashCode_containingNull") };
+    return new Method[] {
+      getMethod(SetHashCodeTester.class, "testHashCode"),
+      getMethod(SetHashCodeTester.class, "testHashCode_containingNull")
+    };
   }
 }

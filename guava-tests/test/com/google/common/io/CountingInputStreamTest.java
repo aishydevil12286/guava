@@ -16,19 +16,25 @@
 
 package com.google.common.io;
 
+import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertThrows;
+
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import org.jspecify.annotations.NullUnmarked;
 
 /**
  * Unit tests for {@link CountingInputStream}.
  *
  * @author Chris Nokleberg
  */
+@NullUnmarked
 public class CountingInputStreamTest extends IoTestCase {
   private CountingInputStream counter;
 
-  @Override protected void setUp() throws Exception {
+  @Override
+  protected void setUp() throws Exception {
     super.setUp();
     counter = new CountingInputStream(new ByteArrayInputStream(new byte[20]));
   }
@@ -72,6 +78,7 @@ public class CountingInputStreamTest extends IoTestCase {
     assertEquals(20, counter.getCount());
   }
 
+  @SuppressWarnings("CheckReturnValue") // calling read() to skip a byte
   public void testMark() throws Exception {
     assertTrue(counter.markSupported());
     assertEquals(10, counter.read(new byte[10]));
@@ -84,36 +91,28 @@ public class CountingInputStreamTest extends IoTestCase {
     assertEquals(10, counter.skip(100));
     assertEquals(20, counter.getCount());
   }
-  
+
   public void testMarkNotSet() {
-    try {
-      counter.reset();
-      fail();
-    } catch (IOException expected) {
-      assertEquals("Mark not set", expected.getMessage());
-    }
+    IOException expected = assertThrows(IOException.class, () -> counter.reset());
+    assertThat(expected).hasMessageThat().isEqualTo("Mark not set");
   }
-  
+
   public void testMarkNotSupported() {
     counter = new CountingInputStream(new UnmarkableInputStream());
 
-    try {
-      counter.reset();
-      fail();
-    } catch (IOException expected) {
-      assertEquals("Mark not supported", expected.getMessage());
-    }
+    IOException expected = assertThrows(IOException.class, () -> counter.reset());
+    assertThat(expected).hasMessageThat().isEqualTo("Mark not supported");
   }
-  
+
   private static class UnmarkableInputStream extends InputStream {
     @Override
-    public int read() throws IOException {
+    public int read() {
       return 0;
     }
-    
+
     @Override
     public boolean markSupported() {
       return false;
-    }    
+    }
   }
 }

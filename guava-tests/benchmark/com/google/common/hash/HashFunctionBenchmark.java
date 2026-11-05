@@ -19,20 +19,22 @@ package com.google.common.hash;
 import com.google.caliper.BeforeExperiment;
 import com.google.caliper.Benchmark;
 import com.google.caliper.Param;
-
 import java.util.Random;
+import org.jspecify.annotations.NullUnmarked;
 
 /**
  * Benchmarks for comparing the various {@link HashFunction functions} that we provide.
  *
  * <p>Parameters for the benchmark are:
+ *
  * <ul>
- * <li>size: The length of the byte array to hash.
- * <li>hashFunctionEnum: The {@link HashFunction} to use for hashing.
+ *   <li>size: The length of the byte array to hash.
+ *   <li>hashFunctionEnum: The {@link HashFunction} to use for hashing.
  * </ul>
  *
  * @author Kurt Alfred Kluever
  */
+@NullUnmarked
 public class HashFunctionBenchmark {
 
   // Use a statically configured random instance for all of the benchmarks
@@ -45,12 +47,24 @@ public class HashFunctionBenchmark {
 
   private byte[] testBytes;
 
-  @BeforeExperiment void setUp() {
+  @BeforeExperiment
+  void setUp() {
     testBytes = new byte[size];
     random.nextBytes(testBytes);
   }
 
-  @Benchmark int hashFunction(int reps) {
+  @Benchmark
+  int hasher(int reps) {
+    HashFunction hashFunction = hashFunctionEnum.getHashFunction();
+    int result = 37;
+    for (int i = 0; i < reps; i++) {
+      result ^= hashFunction.newHasher().putBytes(testBytes).hash().asBytes()[0];
+    }
+    return result;
+  }
+
+  @Benchmark
+  int hashFunction(int reps) {
     HashFunction hashFunction = hashFunctionEnum.getHashFunction();
     int result = 37;
     for (int i = 0; i < reps; i++) {
@@ -59,7 +73,8 @@ public class HashFunctionBenchmark {
     return result;
   }
 
-  @Benchmark int hashFunctionWithOffset(int reps) {
+  @Benchmark
+  int hashFunctionWithOffset(int reps) {
     HashFunction hashFunction = hashFunctionEnum.getHashFunction();
     int result = 37;
     for (int i = 0; i < reps; i++) {

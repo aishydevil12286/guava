@@ -16,39 +16,46 @@
 
 package com.google.common.collect.testing;
 
-import com.google.common.annotations.GwtCompatible;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static java.lang.System.arraycopy;
+import static java.util.Arrays.asList;
+import static java.util.Objects.requireNonNull;
 
+import com.google.common.annotations.GwtCompatible;
 import java.util.AbstractCollection;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 /**
- * A simplistic collection which implements only the bare minimum allowed by the
- * spec, and throws exceptions whenever it can.
+ * A simplistic collection which implements only the bare minimum allowed by the spec, and throws
+ * exceptions whenever it can.
  *
  * @author Kevin Bourrillion
  */
 @GwtCompatible
-public class MinimalCollection<E> extends AbstractCollection<E> {
+@NullMarked
+public class MinimalCollection<E extends @Nullable Object> extends AbstractCollection<E> {
   // TODO: expose allow nulls parameter?
 
-  public static <E> MinimalCollection<E> of(E... contents) {
-    return new MinimalCollection<E>(Object.class, true, contents);
+  public static <E extends @Nullable Object> MinimalCollection<E> of(E... contents) {
+    return new MinimalCollection<>(Object.class, true, contents);
   }
 
   // TODO: use this
-  public static <E> MinimalCollection<E> ofClassAndContents(
-      Class<? super E> type, E... contents) {
-    return new MinimalCollection<E>(type, true, contents);
+  public static <E extends @Nullable Object> MinimalCollection<E> ofClassAndContents(
+      Class<? super @NonNull E> type, E... contents) {
+    return new MinimalCollection<>(type, true, contents);
   }
 
   private final E[] contents;
-  private final Class<? super E> type;
+  private final Class<? super @NonNull E> type;
   private final boolean allowNulls;
 
   // Package-private so that it can be extended.
-  MinimalCollection(Class<? super E> type, boolean allowNulls, E... contents) {
+  MinimalCollection(Class<? super @NonNull E> type, boolean allowNulls, E... contents) {
     // TODO: consider making it shuffle the contents to test iteration order.
     this.contents = Platform.clone(contents);
     this.type = type;
@@ -56,47 +63,46 @@ public class MinimalCollection<E> extends AbstractCollection<E> {
 
     if (!allowNulls) {
       for (Object element : contents) {
-        if (element == null) {
-          throw new NullPointerException();
-        }
+        requireNonNull(element);
       }
     }
   }
 
-  @Override public int size() {
+  @Override
+  public int size() {
     return contents.length;
   }
 
-  @Override public boolean contains(Object object) {
+  @Override
+  public boolean contains(@Nullable Object object) {
     if (!allowNulls) {
       // behave badly
-      if (object == null) {
-        throw new NullPointerException();
-      }
+      checkNotNull(object);
     }
-    Platform.checkCast(type, object);  // behave badly
-    return Arrays.asList(contents).contains(object);
+    Platform.checkCast(type, object); // behave badly
+    return asList(contents).contains(object);
   }
 
-  @Override public boolean containsAll(Collection<?> collection) {
+  @Override
+  public boolean containsAll(Collection<?> collection) {
     if (!allowNulls) {
       for (Object object : collection) {
         // behave badly
-        if (object == null) {
-          throw new NullPointerException();
-        }
+        requireNonNull(object);
       }
     }
     return super.containsAll(collection);
   }
 
-  @Override public Iterator<E> iterator() {
-    return Arrays.asList(contents).iterator();
+  @Override
+  public Iterator<E> iterator() {
+    return asList(contents).iterator();
   }
 
-  @Override public Object[] toArray() {
-    Object[] result = new Object[contents.length];
-    System.arraycopy(contents, 0, result, 0, contents.length);
+  @Override
+  public @Nullable Object[] toArray() {
+    @Nullable Object[] result = new @Nullable Object[contents.length];
+    arraycopy(contents, 0, result, 0, contents.length);
     return result;
   }
 
@@ -105,18 +111,26 @@ public class MinimalCollection<E> extends AbstractCollection<E> {
    * wasn't going to be any actual work to do anyway
    */
 
-  @Override public boolean addAll(Collection<? extends E> elementsToAdd) {
+  @Override
+  public boolean addAll(Collection<? extends E> elementsToAdd) {
     throw up();
   }
-  @Override public boolean removeAll(Collection<?> elementsToRemove) {
+
+  @Override
+  public boolean removeAll(Collection<?> elementsToRemove) {
     throw up();
   }
-  @Override public boolean retainAll(Collection<?> elementsToRetain) {
+
+  @Override
+  public boolean retainAll(Collection<?> elementsToRetain) {
     throw up();
   }
-  @Override public void clear() {
+
+  @Override
+  public void clear() {
     throw up();
   }
+
   private static UnsupportedOperationException up() {
     throw new UnsupportedOperationException();
   }

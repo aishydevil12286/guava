@@ -21,9 +21,11 @@ import static com.google.common.io.SourceSinkFactory.ByteSinkFactory;
 import static com.google.common.io.SourceSinkFactory.ByteSourceFactory;
 import static com.google.common.io.SourceSinkFactory.CharSinkFactory;
 import static com.google.common.io.SourceSinkFactory.CharSourceFactory;
+import static java.lang.Math.min;
+import static java.lang.System.arraycopy;
+import static java.nio.charset.StandardCharsets.UTF_8;
 
-import com.google.common.base.Charsets;
-
+import com.google.errorprone.annotations.Keep;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -36,16 +38,20 @@ import java.io.OutputStreamWriter;
 import java.io.Reader;
 import java.io.Writer;
 import java.nio.CharBuffer;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
+import java.util.logging.Level;
 import java.util.logging.Logger;
-
-import javax.annotation.Nullable;
+import org.jspecify.annotations.NullUnmarked;
+import org.jspecify.annotations.Nullable;
 
 /**
  * {@link SourceSinkFactory} implementations.
  *
  * @author Colin Decker
  */
+@NullUnmarked
 public class SourceSinkFactories {
 
   private SourceSinkFactories() {}
@@ -76,7 +82,7 @@ public class SourceSinkFactories {
 
   public static ByteSinkFactory appendingFileByteSinkFactory() {
     String initialString = IoTestCase.ASCII + IoTestCase.I18N;
-    return new FileByteSinkFactory(initialString.getBytes(Charsets.UTF_8));
+    return new FileByteSinkFactory(initialString.getBytes(UTF_8));
   }
 
   public static CharSourceFactory fileCharSourceFactory() {
@@ -100,18 +106,49 @@ public class SourceSinkFactories {
     return new UrlCharSourceFactory();
   }
 
-  public static CharSourceFactory asCharSourceFactory(final ByteSourceFactory factory) {
+  @AndroidIncompatible
+  public static ByteSourceFactory pathByteSourceFactory() {
+    return new PathByteSourceFactory();
+  }
+
+  @AndroidIncompatible
+  public static ByteSinkFactory pathByteSinkFactory() {
+    return new PathByteSinkFactory(null);
+  }
+
+  @AndroidIncompatible
+  public static ByteSinkFactory appendingPathByteSinkFactory() {
+    String initialString = IoTestCase.ASCII + IoTestCase.I18N;
+    return new PathByteSinkFactory(initialString.getBytes(UTF_8));
+  }
+
+  @AndroidIncompatible
+  public static CharSourceFactory pathCharSourceFactory() {
+    return new PathCharSourceFactory();
+  }
+
+  @AndroidIncompatible
+  public static CharSinkFactory pathCharSinkFactory() {
+    return new PathCharSinkFactory(null);
+  }
+
+  @AndroidIncompatible
+  public static CharSinkFactory appendingPathCharSinkFactory() {
+    String initialString = IoTestCase.ASCII + IoTestCase.I18N;
+    return new PathCharSinkFactory(initialString);
+  }
+
+  public static ByteSourceFactory asByteSourceFactory(CharSourceFactory factory) {
     checkNotNull(factory);
-    return new CharSourceFactory() {
+    return new ByteSourceFactory() {
       @Override
-      public CharSource createSource(String string) throws IOException {
-        return factory.createSource(string.getBytes(Charsets.UTF_8))
-            .asCharSource(Charsets.UTF_8);
+      public ByteSource createSource(byte[] data) throws IOException {
+        return factory.createSource(new String(data, UTF_8)).asByteSource(UTF_8);
       }
 
       @Override
-      public String getExpected(String data) {
-        return new String(factory.getExpected(data.getBytes(Charsets.UTF_8)), Charsets.UTF_8);
+      public byte[] getExpected(byte[] data) {
+        return factory.getExpected(new String(data, UTF_8)).getBytes(UTF_8);
       }
 
       @Override
@@ -121,17 +158,37 @@ public class SourceSinkFactories {
     };
   }
 
-  public static CharSinkFactory asCharSinkFactory(final ByteSinkFactory factory) {
+  public static CharSourceFactory asCharSourceFactory(ByteSourceFactory factory) {
+    checkNotNull(factory);
+    return new CharSourceFactory() {
+      @Override
+      public CharSource createSource(String string) throws IOException {
+        return factory.createSource(string.getBytes(UTF_8)).asCharSource(UTF_8);
+      }
+
+      @Override
+      public String getExpected(String data) {
+        return new String(factory.getExpected(data.getBytes(UTF_8)), UTF_8);
+      }
+
+      @Override
+      public void tearDown() throws IOException {
+        factory.tearDown();
+      }
+    };
+  }
+
+  public static CharSinkFactory asCharSinkFactory(ByteSinkFactory factory) {
     checkNotNull(factory);
     return new CharSinkFactory() {
       @Override
       public CharSink createSink() throws IOException {
-        return factory.createSink().asCharSink(Charsets.UTF_8);
+        return factory.createSink().asCharSink(UTF_8);
       }
 
       @Override
       public String getSinkContents() throws IOException {
-        return new String(factory.getSinkContents(), Charsets.UTF_8);
+        return new String(factory.getSinkContents(), UTF_8);
       }
 
       @Override
@@ -141,7 +198,7 @@ public class SourceSinkFactories {
          * string to that.
          */
         byte[] factoryExpectedForNothing = factory.getExpected(new byte[0]);
-        return new String(factoryExpectedForNothing, Charsets.UTF_8) + checkNotNull(data);
+        return new String(factoryExpectedForNothing, UTF_8) + checkNotNull(data);
       }
 
       @Override
@@ -151,8 +208,8 @@ public class SourceSinkFactories {
     };
   }
 
-  public static ByteSourceFactory asSlicedByteSourceFactory(final ByteSourceFactory factory,
-      final int off, final int len) {
+  public static ByteSourceFactory asSlicedByteSourceFactory(
+      ByteSourceFactory factory, long off, long len) {
     checkNotNull(factory);
     return new ByteSourceFactory() {
       @Override
@@ -163,7 +220,9 @@ public class SourceSinkFactories {
       @Override
       public byte[] getExpected(byte[] bytes) {
         byte[] baseExpected = factory.getExpected(bytes);
-        return Arrays.copyOfRange(baseExpected, off, Math.min(baseExpected.length, off + len));
+        int startOffset = (int) min(off, baseExpected.length);
+        int actualLen = (int) min(len, baseExpected.length - startOffset);
+        return Arrays.copyOfRange(baseExpected, startOffset, startOffset + actualLen);
       }
 
       @Override
@@ -176,7 +235,7 @@ public class SourceSinkFactories {
   private static class StringSourceFactory implements CharSourceFactory {
 
     @Override
-    public CharSource createSource(String data) throws IOException {
+    public CharSource createSource(String data) {
       return CharSource.wrap(data);
     }
 
@@ -186,14 +245,13 @@ public class SourceSinkFactories {
     }
 
     @Override
-    public void tearDown() throws IOException {
-    }
+    public void tearDown() {}
   }
 
   private static class ByteArraySourceFactory implements ByteSourceFactory {
 
     @Override
-    public ByteSource createSource(byte[] bytes) throws IOException {
+    public ByteSource createSource(byte[] bytes) {
       return ByteSource.wrap(bytes);
     }
 
@@ -203,14 +261,13 @@ public class SourceSinkFactories {
     }
 
     @Override
-    public void tearDown() throws IOException {
-    }
+    public void tearDown() {}
   }
 
   private static class EmptyCharSourceFactory implements CharSourceFactory {
 
     @Override
-    public CharSource createSource(String data) throws IOException {
+    public CharSource createSource(String data) {
       return CharSource.empty();
     }
 
@@ -220,14 +277,13 @@ public class SourceSinkFactories {
     }
 
     @Override
-    public void tearDown() throws IOException {
-    }
+    public void tearDown() {}
   }
 
   private static class EmptyByteSourceFactory implements ByteSourceFactory {
 
     @Override
-    public ByteSource createSource(byte[] bytes) throws IOException {
+    public ByteSource createSource(byte[] bytes) {
       return ByteSource.empty();
     }
 
@@ -237,27 +293,28 @@ public class SourceSinkFactories {
     }
 
     @Override
-    public void tearDown() throws IOException {
-    }
+    public void tearDown() {}
   }
 
   private abstract static class FileFactory {
 
     private static final Logger logger = Logger.getLogger(FileFactory.class.getName());
 
-    private final ThreadLocal<File> fileThreadLocal = new ThreadLocal<File>();
+    private final ThreadLocal<File> fileThreadLocal = new ThreadLocal<>();
 
-    protected File createFile() throws IOException {
+    File createFile() throws IOException {
       File file = File.createTempFile("SinkSourceFile", "txt");
       fileThreadLocal.set(file);
       return file;
     }
 
-    protected File getFile() {
+    File getFile() {
       return fileThreadLocal.get();
     }
 
-    public final void tearDown() throws IOException {
+    // acts as an override in subclasses that implement SourceSinkFactory
+    @Keep
+    public final void tearDown() {
       if (!fileThreadLocal.get().delete()) {
         logger.warning("Unable to delete file: " + fileThreadLocal.get());
       }
@@ -288,9 +345,9 @@ public class SourceSinkFactories {
 
   private static class FileByteSinkFactory extends FileFactory implements ByteSinkFactory {
 
-    private final byte[] initialBytes;
+    private final byte @Nullable [] initialBytes;
 
-    private FileByteSinkFactory(@Nullable byte[] initialBytes) {
+    private FileByteSinkFactory(byte @Nullable [] initialBytes) {
       this.initialBytes = initialBytes;
     }
 
@@ -315,8 +372,8 @@ public class SourceSinkFactories {
         return checkNotNull(bytes);
       } else {
         byte[] result = new byte[initialBytes.length + bytes.length];
-        System.arraycopy(initialBytes, 0, result, 0, initialBytes.length);
-        System.arraycopy(bytes, 0, result, initialBytes.length, bytes.length);
+        arraycopy(initialBytes, 0, result, 0, initialBytes.length);
+        arraycopy(bytes, 0, result, initialBytes.length, bytes.length);
         return result;
       }
     }
@@ -341,13 +398,13 @@ public class SourceSinkFactories {
     public CharSource createSource(String string) throws IOException {
       checkNotNull(string);
       File file = createFile();
-      Writer writer = new OutputStreamWriter(new FileOutputStream(file), Charsets.UTF_8);
+      Writer writer = new OutputStreamWriter(new FileOutputStream(file), UTF_8);
       try {
         writer.write(string);
       } finally {
         writer.close();
       }
-      return Files.asCharSource(file, Charsets.UTF_8);
+      return Files.asCharSource(file, UTF_8);
     }
 
     @Override
@@ -358,7 +415,7 @@ public class SourceSinkFactories {
 
   private static class FileCharSinkFactory extends FileFactory implements CharSinkFactory {
 
-    private final String initialString;
+    private final @Nullable String initialString;
 
     private FileCharSinkFactory(@Nullable String initialString) {
       this.initialString = initialString;
@@ -368,35 +425,33 @@ public class SourceSinkFactories {
     public CharSink createSink() throws IOException {
       File file = createFile();
       if (initialString != null) {
-        Writer writer = new OutputStreamWriter(new FileOutputStream(file), Charsets.UTF_8);
+        Writer writer = new OutputStreamWriter(new FileOutputStream(file), UTF_8);
         try {
           writer.write(initialString);
         } finally {
           writer.close();
         }
-        return Files.asCharSink(file, Charsets.UTF_8, FileWriteMode.APPEND);
+        return Files.asCharSink(file, UTF_8, FileWriteMode.APPEND);
       }
-      return Files.asCharSink(file, Charsets.UTF_8);
+      return Files.asCharSink(file, UTF_8);
     }
 
     @Override
     public String getExpected(String string) {
       checkNotNull(string);
-      return initialString == null
-          ? string
-          : initialString + string;
+      return initialString == null ? string : initialString + string;
     }
 
     @Override
     public String getSinkContents() throws IOException {
       File file = getFile();
-      Reader reader = new InputStreamReader(new FileInputStream(file), Charsets.UTF_8);
+      Reader reader = new InputStreamReader(new FileInputStream(file), UTF_8);
       StringBuilder builder = new StringBuilder();
       CharBuffer buffer = CharBuffer.allocate(100);
       while (reader.read(buffer) != -1) {
-        buffer.flip();
+        Java8Compatibility.flip(buffer);
         builder.append(buffer);
-        buffer.clear();
+        Java8Compatibility.clear(buffer);
       }
       return builder.toString();
     }
@@ -404,6 +459,7 @@ public class SourceSinkFactories {
 
   private static class UrlByteSourceFactory extends FileByteSourceFactory {
 
+    @SuppressWarnings("CheckReturnValue") // only using super.createSource to create a file
     @Override
     public ByteSource createSource(byte[] bytes) throws IOException {
       super.createSource(bytes);
@@ -413,10 +469,155 @@ public class SourceSinkFactories {
 
   private static class UrlCharSourceFactory extends FileCharSourceFactory {
 
+    @SuppressWarnings("CheckReturnValue") // only using super.createSource to create a file
     @Override
     public CharSource createSource(String string) throws IOException {
       super.createSource(string); // just ignore returned CharSource
-      return Resources.asCharSource(getFile().toURI().toURL(), Charsets.UTF_8);
+      return Resources.asCharSource(getFile().toURI().toURL(), UTF_8);
+    }
+  }
+
+  @AndroidIncompatible
+  private abstract static class Jdk7FileFactory {
+
+    private static final Logger logger = Logger.getLogger(Jdk7FileFactory.class.getName());
+
+    private final ThreadLocal<Path> fileThreadLocal = new ThreadLocal<>();
+
+    Path createFile() throws IOException {
+      Path file = java.nio.file.Files.createTempFile("SinkSourceFile", "txt");
+      fileThreadLocal.set(file);
+      return file;
+    }
+
+    Path getPath() {
+      return fileThreadLocal.get();
+    }
+
+    // acts as an override in subclasses that implement SourceSinkFactory
+    @Keep
+    public final void tearDown() {
+      try {
+        java.nio.file.Files.delete(fileThreadLocal.get());
+      } catch (IOException e) {
+        logger.log(Level.WARNING, "Unable to delete file: " + fileThreadLocal.get(), e);
+      }
+      fileThreadLocal.remove();
+    }
+  }
+
+  @AndroidIncompatible
+  private static class PathByteSourceFactory extends Jdk7FileFactory implements ByteSourceFactory {
+
+    @Override
+    public ByteSource createSource(byte[] bytes) throws IOException {
+      checkNotNull(bytes);
+      Path file = createFile();
+
+      java.nio.file.Files.write(file, bytes);
+      return MoreFiles.asByteSource(file);
+    }
+
+    @Override
+    public byte[] getExpected(byte[] bytes) {
+      return checkNotNull(bytes);
+    }
+  }
+
+  @AndroidIncompatible
+  private static class PathByteSinkFactory extends Jdk7FileFactory implements ByteSinkFactory {
+
+    private final byte @Nullable [] initialBytes;
+
+    private PathByteSinkFactory(byte @Nullable [] initialBytes) {
+      this.initialBytes = initialBytes;
+    }
+
+    @Override
+    public ByteSink createSink() throws IOException {
+      Path file = createFile();
+      if (initialBytes != null) {
+        java.nio.file.Files.write(file, initialBytes);
+        return MoreFiles.asByteSink(file, StandardOpenOption.APPEND);
+      }
+      return MoreFiles.asByteSink(file);
+    }
+
+    @Override
+    public byte[] getExpected(byte[] bytes) {
+      if (initialBytes == null) {
+        return checkNotNull(bytes);
+      } else {
+        byte[] result = new byte[initialBytes.length + bytes.length];
+        arraycopy(initialBytes, 0, result, 0, initialBytes.length);
+        arraycopy(bytes, 0, result, initialBytes.length, bytes.length);
+        return result;
+      }
+    }
+
+    @Override
+    public byte[] getSinkContents() throws IOException {
+      Path file = getPath();
+      return java.nio.file.Files.readAllBytes(file);
+    }
+  }
+
+  @AndroidIncompatible
+  private static class PathCharSourceFactory extends Jdk7FileFactory implements CharSourceFactory {
+
+    @Override
+    public CharSource createSource(String string) throws IOException {
+      checkNotNull(string);
+      Path file = createFile();
+      try (Writer writer = java.nio.file.Files.newBufferedWriter(file, UTF_8)) {
+        writer.write(string);
+      }
+      return MoreFiles.asCharSource(file, UTF_8);
+    }
+
+    @Override
+    public String getExpected(String string) {
+      return checkNotNull(string);
+    }
+  }
+
+  @AndroidIncompatible
+  private static class PathCharSinkFactory extends Jdk7FileFactory implements CharSinkFactory {
+
+    private final @Nullable String initialString;
+
+    private PathCharSinkFactory(@Nullable String initialString) {
+      this.initialString = initialString;
+    }
+
+    @Override
+    public CharSink createSink() throws IOException {
+      Path file = createFile();
+      if (initialString != null) {
+        try (Writer writer = java.nio.file.Files.newBufferedWriter(file, UTF_8)) {
+          writer.write(initialString);
+        }
+        return MoreFiles.asCharSink(file, UTF_8, StandardOpenOption.APPEND);
+      }
+      return MoreFiles.asCharSink(file, UTF_8);
+    }
+
+    @Override
+    public String getExpected(String string) {
+      checkNotNull(string);
+      return initialString == null ? string : initialString + string;
+    }
+
+    @Override
+    public String getSinkContents() throws IOException {
+      Path file = getPath();
+      try (Reader reader = java.nio.file.Files.newBufferedReader(file, UTF_8)) {
+        StringBuilder builder = new StringBuilder();
+        for (int c = reader.read(); c != -1; c = reader.read()) {
+          builder.append((char) c);
+        }
+        return builder.toString();
+      }
     }
   }
 }

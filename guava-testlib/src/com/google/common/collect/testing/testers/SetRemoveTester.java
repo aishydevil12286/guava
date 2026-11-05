@@ -24,9 +24,8 @@ import com.google.common.collect.testing.features.CollectionFeature;
 import com.google.common.collect.testing.features.CollectionSize;
 
 /**
- * A generic JUnit test which tests remove operations on a set. Can't be
- * invoked directly; please see
- * {@link com.google.common.collect.testing.ListTestSuiteBuilder}.
+ * A generic JUnit test which tests remove operations on a set. Can't be invoked directly; please
+ * see {@link com.google.common.collect.testing.ListTestSuiteBuilder}.
  *
  * @author George van den Driessche
  */
@@ -36,8 +35,8 @@ public class SetRemoveTester<E> extends AbstractSetTester<E> {
   @CollectionSize.Require(absent = ZERO)
   public void testRemove_present() {
     getSet().remove(e0());
-    assertFalse("After remove(present) a set should not contain "
-        + "the removed element.",
+    assertFalse(
+        "After remove(present) a set should not contain the removed element.",
         getSet().contains(e0()));
   }
 }

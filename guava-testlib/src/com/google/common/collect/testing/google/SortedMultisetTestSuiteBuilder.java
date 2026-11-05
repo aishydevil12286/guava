@@ -16,53 +16,54 @@
 
 package com.google.common.collect.testing.google;
 
+import static com.google.common.collect.testing.Helpers.copyToList;
+import static com.google.common.collect.testing.features.CollectionFeature.KNOWN_ORDER;
+import static com.google.common.collect.testing.features.CollectionFeature.RESTRICTS_ELEMENTS;
+import static com.google.common.collect.testing.features.CollectionFeature.SERIALIZABLE;
+import static com.google.common.collect.testing.features.CollectionFeature.SERIALIZABLE_INCLUDING_VIEWS;
+import static com.google.common.testing.SerializableTester.reserialize;
+import static java.util.Arrays.asList;
+import static java.util.Collections.emptySet;
+import static java.util.Collections.sort;
+
+import com.google.common.annotations.GwtIncompatible;
 import com.google.common.collect.BoundType;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Multiset;
 import com.google.common.collect.SortedMultiset;
 import com.google.common.collect.testing.AbstractTester;
 import com.google.common.collect.testing.FeatureSpecificTestSuiteBuilder;
-import com.google.common.collect.testing.Helpers;
 import com.google.common.collect.testing.OneSizeTestContainerGenerator;
 import com.google.common.collect.testing.SampleElements;
 import com.google.common.collect.testing.SetTestSuiteBuilder;
-import com.google.common.collect.testing.features.CollectionFeature;
 import com.google.common.collect.testing.features.Feature;
-import com.google.common.testing.SerializableTester;
-
-import junit.framework.TestSuite;
-
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import junit.framework.TestSuite;
 
 /**
- * Creates, based on your criteria, a JUnit test suite that exhaustively tests a
- * {@code SortedMultiset} implementation.
+ * Creates, based on your criteria, a JUnit test suite that exhaustively tests a {@code
+ * SortedMultiset} implementation.
  *
  * <p><b>Warning:</b> expects that {@code E} is a String.
  *
  * @author Louis Wasserman
  */
-public class SortedMultisetTestSuiteBuilder<E> extends
-    MultisetTestSuiteBuilder<E> {
-  public static <E> SortedMultisetTestSuiteBuilder<E> using(
-      TestMultisetGenerator<E> generator) {
-    SortedMultisetTestSuiteBuilder<E> result =
-        new SortedMultisetTestSuiteBuilder<E>();
+@GwtIncompatible
+public class SortedMultisetTestSuiteBuilder<E> extends MultisetTestSuiteBuilder<E> {
+  public static <E> SortedMultisetTestSuiteBuilder<E> using(TestMultisetGenerator<E> generator) {
+    SortedMultisetTestSuiteBuilder<E> result = new SortedMultisetTestSuiteBuilder<>();
     result.usingGenerator(generator);
     return result;
   }
 
   @Override
   public TestSuite createTestSuite() {
-    withFeatures(CollectionFeature.KNOWN_ORDER);
+    withFeatures(KNOWN_ORDER);
     TestSuite suite = super.createTestSuite();
     for (TestSuite subSuite : createDerivedSuites(this)) {
       suite.addTest(subSuite);
@@ -70,20 +71,21 @@ public class SortedMultisetTestSuiteBuilder<E> extends
     return suite;
   }
 
+  @SuppressWarnings("rawtypes") // class literals
   @Override
   protected List<Class<? extends AbstractTester>> getTesters() {
-    List<Class<? extends AbstractTester>> testers =
-        Helpers.copyToList(super.getTesters());
+    List<Class<? extends AbstractTester>> testers = copyToList(super.getTesters());
     testers.add(MultisetNavigationTester.class);
     return testers;
   }
 
   @Override
-  TestSuite createElementSetTestSuite(FeatureSpecificTestSuiteBuilder<
-      ?, ? extends OneSizeTestContainerGenerator<Collection<E>, E>> parentBuilder) {
-    // TODO(user): make a SortedElementSetGenerator
-    return SetTestSuiteBuilder
-        .using(new ElementSetGenerator<E>(parentBuilder.getSubjectGenerator()))
+  TestSuite createElementSetTestSuite(
+      FeatureSpecificTestSuiteBuilder<?, ? extends OneSizeTestContainerGenerator<Collection<E>, E>>
+          parentBuilder) {
+    // TODO(lowasser): make a SortedElementSetGenerator
+    return SetTestSuiteBuilder.using(
+            new ElementSetGenerator<E>(parentBuilder.getSubjectGenerator()))
         .named(getName() + ".elementSet")
         .withFeatures(computeElementSetFeatures(parentBuilder.getFeatures()))
         .suppressing(parentBuilder.getSuppressedTests())
@@ -91,135 +93,123 @@ public class SortedMultisetTestSuiteBuilder<E> extends
   }
 
   /**
-   * To avoid infinite recursion, test suites with these marker features won't
-   * have derived suites created for them.
+   * To avoid infinite recursion, test suites with these marker features won't have derived suites
+   * created for them.
    */
   enum NoRecurse implements Feature<Void> {
-    SUBMULTISET, DESCENDING;
+    SUBMULTISET,
+    DESCENDING;
 
     @Override
     public Set<Feature<? super Void>> getImpliedFeatures() {
-      return Collections.emptySet();
+      return emptySet();
     }
   }
 
-  /**
-   * Two bounds (from and to) define how to build a subMultiset.
-   */
+  /** Two bounds (from and to) define how to build a subMultiset. */
   enum Bound {
-    INCLUSIVE, EXCLUSIVE, NO_BOUND;
+    INCLUSIVE,
+    EXCLUSIVE,
+    NO_BOUND;
   }
 
-  List<TestSuite> createDerivedSuites(
-      SortedMultisetTestSuiteBuilder<E> parentBuilder) {
-    List<TestSuite> derivedSuites = Lists.newArrayList();
+  final List<TestSuite> createDerivedSuites(SortedMultisetTestSuiteBuilder<E> parentBuilder) {
+    List<TestSuite> derivedSuites = new ArrayList<>();
 
     if (!parentBuilder.getFeatures().contains(NoRecurse.DESCENDING)) {
       derivedSuites.add(createDescendingSuite(parentBuilder));
     }
 
-    if (parentBuilder.getFeatures().contains(CollectionFeature.SERIALIZABLE)) {
+    if (parentBuilder.getFeatures().contains(SERIALIZABLE)) {
       derivedSuites.add(createReserializedSuite(parentBuilder));
     }
 
     if (!parentBuilder.getFeatures().contains(NoRecurse.SUBMULTISET)) {
-      derivedSuites.add(createSubMultisetSuite(parentBuilder, Bound.NO_BOUND,
-          Bound.EXCLUSIVE));
-      derivedSuites.add(createSubMultisetSuite(parentBuilder, Bound.NO_BOUND,
-          Bound.INCLUSIVE));
-      derivedSuites.add(createSubMultisetSuite(parentBuilder, Bound.EXCLUSIVE,
-          Bound.NO_BOUND));
-      derivedSuites.add(createSubMultisetSuite(parentBuilder, Bound.EXCLUSIVE,
-          Bound.EXCLUSIVE));
-      derivedSuites.add(createSubMultisetSuite(parentBuilder, Bound.EXCLUSIVE,
-          Bound.INCLUSIVE));
-      derivedSuites.add(createSubMultisetSuite(parentBuilder, Bound.INCLUSIVE,
-          Bound.NO_BOUND));
-      derivedSuites.add(createSubMultisetSuite(parentBuilder, Bound.INCLUSIVE,
-          Bound.EXCLUSIVE));
-      derivedSuites.add(createSubMultisetSuite(parentBuilder, Bound.INCLUSIVE,
-          Bound.INCLUSIVE));
+      derivedSuites.add(createSubMultisetSuite(parentBuilder, Bound.NO_BOUND, Bound.EXCLUSIVE));
+      derivedSuites.add(createSubMultisetSuite(parentBuilder, Bound.NO_BOUND, Bound.INCLUSIVE));
+      derivedSuites.add(createSubMultisetSuite(parentBuilder, Bound.EXCLUSIVE, Bound.NO_BOUND));
+      derivedSuites.add(createSubMultisetSuite(parentBuilder, Bound.EXCLUSIVE, Bound.EXCLUSIVE));
+      derivedSuites.add(createSubMultisetSuite(parentBuilder, Bound.EXCLUSIVE, Bound.INCLUSIVE));
+      derivedSuites.add(createSubMultisetSuite(parentBuilder, Bound.INCLUSIVE, Bound.NO_BOUND));
+      derivedSuites.add(createSubMultisetSuite(parentBuilder, Bound.INCLUSIVE, Bound.EXCLUSIVE));
+      derivedSuites.add(createSubMultisetSuite(parentBuilder, Bound.INCLUSIVE, Bound.INCLUSIVE));
     }
 
     return derivedSuites;
   }
 
   private TestSuite createSubMultisetSuite(
-      SortedMultisetTestSuiteBuilder<E> parentBuilder, final Bound from,
-      final Bound to) {
-    final TestMultisetGenerator<E> delegate =
+      SortedMultisetTestSuiteBuilder<E> parentBuilder, Bound from, Bound to) {
+    TestMultisetGenerator<E> delegate =
         (TestMultisetGenerator<E>) parentBuilder.getSubjectGenerator();
 
-    Set<Feature<?>> features = new HashSet<Feature<?>>();
+    Set<Feature<?>> features = new HashSet<>();
     features.add(NoRecurse.SUBMULTISET);
-    features.add(CollectionFeature.RESTRICTS_ELEMENTS);
+    features.add(RESTRICTS_ELEMENTS);
     features.addAll(parentBuilder.getFeatures());
 
-    if (!features.remove(CollectionFeature.SERIALIZABLE_INCLUDING_VIEWS)) {
-      features.remove(CollectionFeature.SERIALIZABLE);
+    if (!features.remove(SERIALIZABLE_INCLUDING_VIEWS)) {
+      features.remove(SERIALIZABLE);
     }
 
     SortedMultiset<E> emptyMultiset = (SortedMultiset<E>) delegate.create();
-    final Comparator<? super E> comparator = emptyMultiset.comparator();
+    Comparator<? super E> comparator = emptyMultiset.comparator();
     SampleElements<E> samples = delegate.samples();
-    @SuppressWarnings("unchecked")
     List<E> samplesList =
-        Arrays.asList(samples.e0(), samples.e1(), samples.e2(), samples.e3(),
-            samples.e4());
+        asList(samples.e0(), samples.e1(), samples.e2(), samples.e3(), samples.e4());
 
-    Collections.sort(samplesList, comparator);
-    final E firstInclusive = samplesList.get(0);
-    final E lastInclusive = samplesList.get(samplesList.size() - 1);
+    sort(samplesList, comparator);
+    E firstInclusive = samplesList.get(0);
+    E lastInclusive = samplesList.get(samplesList.size() - 1);
 
-    return SortedMultisetTestSuiteBuilder
-        .using(new ForwardingTestMultisetGenerator<E>(delegate) {
-          @Override
-          public SortedMultiset<E> create(Object... entries) {
-            @SuppressWarnings("unchecked")
-            // we dangerously assume E is a string
-            List<E> extremeValues = (List) getExtremeValues();
-            @SuppressWarnings("unchecked")
-            // map generators must past entry objects
-            List<E> normalValues = (List) Arrays.asList(entries);
+    return using(
+            new ForwardingTestMultisetGenerator<E>(delegate) {
+              @Override
+              public SortedMultiset<E> create(Object... entries) {
+                @SuppressWarnings("unchecked")
+                // we dangerously assume E is a string
+                List<E> extremeValues = (List<E>) getExtremeValues();
+                @SuppressWarnings("unchecked")
+                // map generators must past entry objects
+                List<E> normalValues = (List<E>) asList(entries);
 
-            // prepare extreme values to be filtered out of view
-            Collections.sort(extremeValues, comparator);
-            E firstExclusive = extremeValues.get(1);
-            E lastExclusive = extremeValues.get(2);
-            if (from == Bound.NO_BOUND) {
-              extremeValues.remove(0);
-              extremeValues.remove(0);
-            }
-            if (to == Bound.NO_BOUND) {
-              extremeValues.remove(extremeValues.size() - 1);
-              extremeValues.remove(extremeValues.size() - 1);
-            }
+                // prepare extreme values to be filtered out of view
+                sort(extremeValues, comparator);
+                E firstExclusive = extremeValues.get(1);
+                E lastExclusive = extremeValues.get(2);
+                if (from == Bound.NO_BOUND) {
+                  extremeValues.remove(0);
+                  extremeValues.remove(0);
+                }
+                if (to == Bound.NO_BOUND) {
+                  extremeValues.remove(extremeValues.size() - 1);
+                  extremeValues.remove(extremeValues.size() - 1);
+                }
 
-            // the regular values should be visible after filtering
-            List<E> allEntries = new ArrayList<E>();
-            allEntries.addAll(extremeValues);
-            allEntries.addAll(normalValues);
-            SortedMultiset<E> multiset =
-                (SortedMultiset<E>) delegate.create(allEntries.toArray());
+                // the regular values should be visible after filtering
+                List<E> allEntries = new ArrayList<>();
+                allEntries.addAll(extremeValues);
+                allEntries.addAll(normalValues);
+                SortedMultiset<E> multiset =
+                    (SortedMultiset<E>) delegate.create(allEntries.toArray());
 
-            // call the smallest subMap overload that filters out the extreme
-            // values
-            if (from == Bound.INCLUSIVE) {
-              multiset =
-                  multiset.tailMultiset(firstInclusive, BoundType.CLOSED);
-            } else if (from == Bound.EXCLUSIVE) {
-              multiset = multiset.tailMultiset(firstExclusive, BoundType.OPEN);
-            }
+                // call the smallest subMap overload that filters out the extreme
+                // values
+                if (from == Bound.INCLUSIVE) {
+                  multiset = multiset.tailMultiset(firstInclusive, BoundType.CLOSED);
+                } else if (from == Bound.EXCLUSIVE) {
+                  multiset = multiset.tailMultiset(firstExclusive, BoundType.OPEN);
+                }
 
-            if (to == Bound.INCLUSIVE) {
-              multiset = multiset.headMultiset(lastInclusive, BoundType.CLOSED);
-            } else if (to == Bound.EXCLUSIVE) {
-              multiset = multiset.headMultiset(lastExclusive, BoundType.OPEN);
-            }
+                if (to == Bound.INCLUSIVE) {
+                  multiset = multiset.headMultiset(lastInclusive, BoundType.CLOSED);
+                } else if (to == Bound.EXCLUSIVE) {
+                  multiset = multiset.headMultiset(lastExclusive, BoundType.OPEN);
+                }
 
-            return multiset;
-          }
-        })
+                return multiset;
+              }
+            })
         .named(parentBuilder.getName() + " subMultiset " + from + "-" + to)
         .withFeatures(features)
         .suppressing(parentBuilder.getSuppressedTests())
@@ -227,16 +217,15 @@ public class SortedMultisetTestSuiteBuilder<E> extends
   }
 
   /**
-   * Returns an array of four bogus elements that will always be too high or too
-   * low for the display. This includes two values for each extreme.
+   * Returns an array of four bogus elements that will always be too high or too low for the
+   * display. This includes two values for each extreme.
    *
-   * <p>
-   * This method (dangerously) assume that the strings {@code "!! a"} and
-   * {@code "~~ z"} will work for this purpose, which may cause problems for
-   * navigable maps with non-string or unicode generators.
+   * <p>This method (dangerously) assume that the strings {@code "!! a"} and {@code "~~ z"} will
+   * work for this purpose, which may cause problems for navigable maps with non-string or unicode
+   * generators.
    */
-  private List<String> getExtremeValues() {
-    List<String> result = new ArrayList<String>();
+  private static List<String> getExtremeValues() {
+    List<String> result = new ArrayList<>();
     result.add("!! a");
     result.add("!! b");
     result.add("~~ y");
@@ -244,62 +233,57 @@ public class SortedMultisetTestSuiteBuilder<E> extends
     return result;
   }
 
-  private TestSuite createDescendingSuite(
-      SortedMultisetTestSuiteBuilder<E> parentBuilder) {
-    final TestMultisetGenerator<E> delegate =
+  private TestSuite createDescendingSuite(SortedMultisetTestSuiteBuilder<E> parentBuilder) {
+    TestMultisetGenerator<E> delegate =
         (TestMultisetGenerator<E>) parentBuilder.getSubjectGenerator();
 
-    Set<Feature<?>> features = new HashSet<Feature<?>>();
+    Set<Feature<?>> features = new HashSet<>();
     features.add(NoRecurse.DESCENDING);
     features.addAll(parentBuilder.getFeatures());
-    if (!features.remove(CollectionFeature.SERIALIZABLE_INCLUDING_VIEWS)) {
-      features.remove(CollectionFeature.SERIALIZABLE);
+    if (!features.remove(SERIALIZABLE_INCLUDING_VIEWS)) {
+      features.remove(SERIALIZABLE);
     }
 
-    return SortedMultisetTestSuiteBuilder
-        .using(new ForwardingTestMultisetGenerator<E>(delegate) {
-          @Override
-          public SortedMultiset<E> create(Object... entries) {
-            return ((SortedMultiset<E>) super.create(entries))
-                .descendingMultiset();
-          }
+    return using(
+            new ForwardingTestMultisetGenerator<E>(delegate) {
+              @Override
+              public SortedMultiset<E> create(Object... entries) {
+                return ((SortedMultiset<E>) super.create(entries)).descendingMultiset();
+              }
 
-          @Override
-          public Iterable<E> order(List<E> insertionOrder) {
-            return ImmutableList.copyOf(super.order(insertionOrder)).reverse();
-          }
-        })
+              @Override
+              public Iterable<E> order(List<E> insertionOrder) {
+                return ImmutableList.copyOf(super.order(insertionOrder)).reverse();
+              }
+            })
         .named(parentBuilder.getName() + " descending")
         .withFeatures(features)
         .suppressing(parentBuilder.getSuppressedTests())
         .createTestSuite();
   }
 
-  private TestSuite createReserializedSuite(
-      SortedMultisetTestSuiteBuilder<E> parentBuilder) {
-    final TestMultisetGenerator<E> delegate =
+  private TestSuite createReserializedSuite(SortedMultisetTestSuiteBuilder<E> parentBuilder) {
+    TestMultisetGenerator<E> delegate =
         (TestMultisetGenerator<E>) parentBuilder.getSubjectGenerator();
 
-    Set<Feature<?>> features = new HashSet<Feature<?>>();
-    features.addAll(parentBuilder.getFeatures());
-    features.remove(CollectionFeature.SERIALIZABLE);
-    features.remove(CollectionFeature.SERIALIZABLE_INCLUDING_VIEWS);
+    Set<Feature<?>> features = new HashSet<>(parentBuilder.getFeatures());
+    features.remove(SERIALIZABLE);
+    features.remove(SERIALIZABLE_INCLUDING_VIEWS);
 
-    return SortedMultisetTestSuiteBuilder
-        .using(new ForwardingTestMultisetGenerator<E>(delegate) {
-          @Override
-          public SortedMultiset<E> create(Object... entries) {
-            return SerializableTester.reserialize(((SortedMultiset<E>) super.create(entries)));
-          }
-        })
+    return using(
+            new ForwardingTestMultisetGenerator<E>(delegate) {
+              @Override
+              public SortedMultiset<E> create(Object... entries) {
+                return reserialize((SortedMultiset<E>) super.create(entries));
+              }
+            })
         .named(parentBuilder.getName() + " reserialized")
         .withFeatures(features)
         .suppressing(parentBuilder.getSuppressedTests())
         .createTestSuite();
   }
 
-  private static class ForwardingTestMultisetGenerator<E>
-      implements TestMultisetGenerator<E> {
+  private static class ForwardingTestMultisetGenerator<E> implements TestMultisetGenerator<E> {
     private final TestMultisetGenerator<E> delegate;
 
     ForwardingTestMultisetGenerator(TestMultisetGenerator<E> delegate) {

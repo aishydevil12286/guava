@@ -16,35 +16,47 @@
 
 package com.google.common.collect;
 
+import com.google.common.annotations.GwtIncompatible;
+import com.google.common.annotations.J2ktIncompatible;
 import java.util.Collection;
 import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.TimeUnit;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A {@link BlockingDeque} which forwards all its method calls to another {@code BlockingDeque}.
  * Subclasses should override one or more methods to modify the behavior of the backing deque as
  * desired per the <a href="http://en.wikipedia.org/wiki/Decorator_pattern">decorator pattern</a>.
  *
- * <p><b>Warning:</b> The methods of {@code ForwardingBlockingDeque} forward
- * <b>indiscriminately</b> to the methods of the delegate. For example, overriding {@link #add}
- * alone <b>will not</b> change the behaviour of {@link #offer} which can lead to unexpected
- * behaviour. In this case, you should override {@code offer} as well, either providing your own
- * implementation, or delegating to the provided {@code standardOffer} method.
+ * <p><b>Warning:</b> The methods of {@code ForwardingBlockingDeque} forward <b>indiscriminately</b>
+ * to the methods of the delegate. For example, overriding {@link #add} alone <b>will not</b> change
+ * the behaviour of {@link #offer} which can lead to unexpected behaviour. In this case, you should
+ * override {@code offer} as well, either providing your own implementation, or delegating to the
+ * provided {@code standardOffer} method.
  *
- * <p>
- * The {@code standard} methods are not guaranteed to be thread-safe, even when all of the methods
- * that they depend on are thread-safe.
+ * <p><b>{@code default} method warning:</b> This class does <i>not</i> forward calls to {@code
+ * default} methods. Instead, it inherits their default implementations. When those implementations
+ * invoke methods, they invoke methods on the {@code ForwardingBlockingDeque}.
+ *
+ * <p>The {@code standard} methods are not guaranteed to be thread-safe, even when all of the
+ * methods that they depend on are thread-safe.
  *
  * @author Emily Soldal
  * @since 14.0
+ * @deprecated This class has moved to {@code com.google.common.util.concurrent}. Please use {@link
+ *     com.google.common.util.concurrent.ForwardingBlockingDeque} instead.
  */
-public abstract class ForwardingBlockingDeque<E>
-    extends ForwardingDeque<E> implements BlockingDeque<E> {
+@Deprecated
+@J2ktIncompatible
+@GwtIncompatible
+public abstract class ForwardingBlockingDeque<E> extends ForwardingDeque<E>
+    implements BlockingDeque<E> {
 
   /** Constructor for use by subclasses. */
   protected ForwardingBlockingDeque() {}
 
-  @Override protected abstract BlockingDeque<E> delegate();
+  @Override
+  protected abstract BlockingDeque<E> delegate();
 
   @Override
   public int remainingCapacity() {
@@ -82,12 +94,12 @@ public abstract class ForwardingBlockingDeque<E>
   }
 
   @Override
-  public E pollFirst(long timeout, TimeUnit unit) throws InterruptedException {
+  public @Nullable E pollFirst(long timeout, TimeUnit unit) throws InterruptedException {
     return delegate().pollFirst(timeout, unit);
   }
 
   @Override
-  public E pollLast(long timeout, TimeUnit unit) throws InterruptedException {
+  public @Nullable E pollLast(long timeout, TimeUnit unit) throws InterruptedException {
     return delegate().pollLast(timeout, unit);
   }
 
@@ -107,7 +119,7 @@ public abstract class ForwardingBlockingDeque<E>
   }
 
   @Override
-  public E poll(long timeout, TimeUnit unit) throws InterruptedException {
+  public @Nullable E poll(long timeout, TimeUnit unit) throws InterruptedException {
     return delegate().poll(timeout, unit);
   }
 

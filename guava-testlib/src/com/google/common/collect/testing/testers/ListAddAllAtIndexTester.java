@@ -21,29 +21,28 @@ import static com.google.common.collect.testing.features.CollectionSize.ONE;
 import static com.google.common.collect.testing.features.CollectionSize.ZERO;
 import static com.google.common.collect.testing.features.ListFeature.SUPPORTS_ADD_WITH_INDEX;
 import static java.util.Collections.singletonList;
+import static org.junit.Assert.assertThrows;
 
 import com.google.common.annotations.GwtCompatible;
 import com.google.common.collect.testing.MinimalCollection;
 import com.google.common.collect.testing.features.CollectionFeature;
 import com.google.common.collect.testing.features.CollectionSize;
 import com.google.common.collect.testing.features.ListFeature;
-
 import java.util.List;
 
 /**
- * A generic JUnit test which tests {@code addAll(int, Collection)} operations
- * on a list. Can't be invoked directly; please see
- * {@link com.google.common.collect.testing.ListTestSuiteBuilder}.
+ * A generic JUnit test which tests {@code addAll(int, Collection)} operations on a list. Can't be
+ * invoked directly; please see {@link com.google.common.collect.testing.ListTestSuiteBuilder}.
  *
  * @author Chris Povirk
  */
-@SuppressWarnings("unchecked") // too many "unchecked generic array creations"
 @GwtCompatible
 public class ListAddAllAtIndexTester<E> extends AbstractListTester<E> {
   @ListFeature.Require(SUPPORTS_ADD_WITH_INDEX)
   @CollectionSize.Require(absent = ZERO)
   public void testAddAllAtIndex_supportedAllPresent() {
-    assertTrue("addAll(n, allPresent) should return true",
+    assertTrue(
+        "addAll(n, allPresent) should return true",
         getList().addAll(0, MinimalCollection.of(e0())));
     expectAdded(0, e0());
   }
@@ -51,18 +50,16 @@ public class ListAddAllAtIndexTester<E> extends AbstractListTester<E> {
   @ListFeature.Require(absent = SUPPORTS_ADD_WITH_INDEX)
   @CollectionSize.Require(absent = ZERO)
   public void testAddAllAtIndex_unsupportedAllPresent() {
-    try {
-      getList().addAll(0, MinimalCollection.of(e0()));
-      fail("addAll(n, allPresent) should throw");
-    } catch (UnsupportedOperationException expected) {
-    }
+    assertThrows(
+        UnsupportedOperationException.class, () -> getList().addAll(0, MinimalCollection.of(e0())));
     expectUnchanged();
   }
 
   @ListFeature.Require(SUPPORTS_ADD_WITH_INDEX)
   @CollectionSize.Require(absent = ZERO)
   public void testAddAllAtIndex_supportedSomePresent() {
-    assertTrue("addAll(n, allPresent) should return true",
+    assertTrue(
+        "addAll(n, allPresent) should return true",
         getList().addAll(0, MinimalCollection.of(e0(), e3())));
     expectAdded(0, e0(), e3());
   }
@@ -70,26 +67,24 @@ public class ListAddAllAtIndexTester<E> extends AbstractListTester<E> {
   @ListFeature.Require(absent = SUPPORTS_ADD_WITH_INDEX)
   @CollectionSize.Require(absent = ZERO)
   public void testAddAllAtIndex_unsupportedSomePresent() {
-    try {
-      getList().addAll(0, MinimalCollection.of(e0(), e3()));
-      fail("addAll(n, allPresent) should throw");
-    } catch (UnsupportedOperationException expected) {
-    }
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> getList().addAll(0, MinimalCollection.of(e0(), e3())));
     expectUnchanged();
     expectMissing(e3());
   }
 
   @ListFeature.Require(SUPPORTS_ADD_WITH_INDEX)
   public void testAddAllAtIndex_supportedNothing() {
-    assertFalse("addAll(n, nothing) should return false",
-        getList().addAll(0, emptyCollection()));
+    assertFalse("addAll(n, nothing) should return false", getList().addAll(0, emptyCollection()));
     expectUnchanged();
   }
 
   @ListFeature.Require(absent = SUPPORTS_ADD_WITH_INDEX)
   public void testAddAllAtIndex_unsupportedNothing() {
     try {
-      assertFalse("addAll(n, nothing) should return false or throw",
+      assertFalse(
+          "addAll(n, nothing) should return false or throw",
           getList().addAll(0, emptyCollection()));
     } catch (UnsupportedOperationException tolerated) {
     }
@@ -98,10 +93,8 @@ public class ListAddAllAtIndexTester<E> extends AbstractListTester<E> {
 
   @ListFeature.Require(SUPPORTS_ADD_WITH_INDEX)
   public void testAddAllAtIndex_withDuplicates() {
-    MinimalCollection<E> elementsToAdd
-        = MinimalCollection.of(e0(), e1(), e0(), e1());
-    assertTrue("addAll(n, hasDuplicates) should return true",
-        getList().addAll(0, elementsToAdd));
+    MinimalCollection<E> elementsToAdd = MinimalCollection.of(e0(), e1(), e0(), e1());
+    assertTrue("addAll(n, hasDuplicates) should return true", getList().addAll(0, elementsToAdd));
     expectAdded(0, e0(), e1(), e0(), e1());
   }
 
@@ -109,8 +102,7 @@ public class ListAddAllAtIndexTester<E> extends AbstractListTester<E> {
   @CollectionFeature.Require(ALLOWS_NULL_VALUES)
   public void testAddAllAtIndex_nullSupported() {
     List<E> containsNull = singletonList(null);
-    assertTrue("addAll(n, containsNull) should return true",
-        getList().addAll(0, containsNull));
+    assertTrue("addAll(n, containsNull) should return true", getList().addAll(0, containsNull));
     /*
      * We need (E) to force interpretation of null as the single element of a
      * varargs array, not the array itself
@@ -122,11 +114,7 @@ public class ListAddAllAtIndexTester<E> extends AbstractListTester<E> {
   @CollectionFeature.Require(absent = ALLOWS_NULL_VALUES)
   public void testAddAllAtIndex_nullUnsupported() {
     List<E> containsNull = singletonList(null);
-    try {
-      getList().addAll(0, containsNull);
-      fail("addAll(n, containsNull) should throw");
-    } catch (NullPointerException expected) {
-    }
+    assertThrows(NullPointerException.class, () -> getList().addAll(0, containsNull));
     expectUnchanged();
     expectNullMissingWhenNullUnsupported(
         "Should not contain null after unsupported addAll(n, containsNull)");
@@ -135,7 +123,8 @@ public class ListAddAllAtIndexTester<E> extends AbstractListTester<E> {
   @ListFeature.Require(SUPPORTS_ADD_WITH_INDEX)
   @CollectionSize.Require(absent = {ZERO, ONE})
   public void testAddAllAtIndex_middle() {
-    assertTrue("addAll(middle, disjoint) should return true",
+    assertTrue(
+        "addAll(middle, disjoint) should return true",
         getList().addAll(getNumElements() / 2, createDisjointCollection()));
     expectAdded(getNumElements() / 2, createDisjointCollection());
   }
@@ -143,39 +132,31 @@ public class ListAddAllAtIndexTester<E> extends AbstractListTester<E> {
   @ListFeature.Require(SUPPORTS_ADD_WITH_INDEX)
   @CollectionSize.Require(absent = ZERO)
   public void testAddAllAtIndex_end() {
-    assertTrue("addAll(end, disjoint) should return true",
+    assertTrue(
+        "addAll(end, disjoint) should return true",
         getList().addAll(getNumElements(), createDisjointCollection()));
     expectAdded(getNumElements(), createDisjointCollection());
   }
 
   @ListFeature.Require(SUPPORTS_ADD_WITH_INDEX)
   public void testAddAllAtIndex_nullCollectionReference() {
-    try {
-      getList().addAll(0, null);
-      fail("addAll(n, null) should throw");
-    } catch (NullPointerException expected) {
-    }
+    assertThrows(NullPointerException.class, () -> getList().addAll(0, null));
     expectUnchanged();
   }
 
   @ListFeature.Require(SUPPORTS_ADD_WITH_INDEX)
   public void testAddAllAtIndex_negative() {
-    try {
-      getList().addAll(-1, MinimalCollection.of(e3()));
-      fail("addAll(-1, e) should throw");
-    } catch (IndexOutOfBoundsException expected) {
-    }
+    assertThrows(
+        IndexOutOfBoundsException.class, () -> getList().addAll(-1, MinimalCollection.of(e3())));
     expectUnchanged();
     expectMissing(e3());
   }
 
   @ListFeature.Require(SUPPORTS_ADD_WITH_INDEX)
   public void testAddAllAtIndex_tooLarge() {
-    try {
-      getList().addAll(getNumElements() + 1, MinimalCollection.of(e3()));
-      fail("addAll(size + 1, e) should throw");
-    } catch (IndexOutOfBoundsException expected) {
-    }
+    assertThrows(
+        IndexOutOfBoundsException.class,
+        () -> getList().addAll(getNumElements() + 1, MinimalCollection.of(e3())));
     expectUnchanged();
     expectMissing(e3());
   }

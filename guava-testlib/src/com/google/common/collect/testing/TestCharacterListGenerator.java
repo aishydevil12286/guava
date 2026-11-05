@@ -18,8 +18,8 @@ package com.google.common.collect.testing;
 
 import com.google.common.annotations.GwtCompatible;
 import com.google.common.collect.testing.SampleElements.Chars;
-
 import java.util.List;
+import org.jspecify.annotations.NullMarked;
 
 /**
  * Generates {@code List<Character>} instances for test suites.
@@ -28,8 +28,8 @@ import java.util.List;
  * @author Louis Wasserman
  */
 @GwtCompatible
-public abstract class TestCharacterListGenerator
-    implements TestListGenerator<Character> {
+@NullMarked
+public abstract class TestCharacterListGenerator implements TestListGenerator<Character> {
   @Override
   public SampleElements<Character> samples() {
     return new Chars();
@@ -46,8 +46,8 @@ public abstract class TestCharacterListGenerator
   }
 
   /**
-   * Creates a new collection containing the given elements; implement this
-   * method instead of {@link #create(Object...)}.
+   * Creates a new collection containing the given elements; implement this method instead of {@link
+   * #create(Object...)}.
    */
   protected abstract List<Character> create(Character[] elements);
 

@@ -18,9 +18,9 @@ package com.google.common.collect.testing;
 
 import com.google.common.annotations.GwtCompatible;
 import com.google.common.collect.testing.SampleElements.Unhashables;
-
 import java.util.Collection;
 import java.util.List;
+import org.jspecify.annotations.NullMarked;
 
 /**
  * Creates collections containing unhashable sample elements, to be tested.
@@ -28,8 +28,8 @@ import java.util.List;
  * @author Regina O'Dell
  */
 @GwtCompatible
-public abstract class
-    TestUnhashableCollectionGenerator<T extends Collection<UnhashableObject>>
+@NullMarked
+public abstract class TestUnhashableCollectionGenerator<T extends Collection<UnhashableObject>>
     implements TestCollectionGenerator<UnhashableObject> {
   @Override
   public SampleElements<UnhashableObject> samples() {
@@ -47,8 +47,8 @@ public abstract class
   }
 
   /**
-   * Creates a new collection containing the given elements; implement this
-   * method instead of {@link #create(Object...)}.
+   * Creates a new collection containing the given elements; implement this method instead of {@link
+   * #create(Object...)}.
    */
   protected abstract T create(UnhashableObject[] elements);
 
@@ -58,8 +58,7 @@ public abstract class
   }
 
   @Override
-  public Iterable<UnhashableObject> order(
-      List<UnhashableObject> insertionOrder) {
+  public Iterable<UnhashableObject> order(List<UnhashableObject> insertionOrder) {
     return insertionOrder;
   }
 }

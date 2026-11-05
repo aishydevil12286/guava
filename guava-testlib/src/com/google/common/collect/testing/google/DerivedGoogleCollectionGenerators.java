@@ -16,22 +16,25 @@
 
 package com.google.common.collect.testing.google;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.collect.testing.Helpers.mapEntry;
+
 import com.google.common.annotations.GwtCompatible;
 import com.google.common.collect.BiMap;
 import com.google.common.collect.testing.DerivedGenerator;
-import com.google.common.collect.testing.Helpers;
 import com.google.common.collect.testing.OneSizeTestContainerGenerator;
 import com.google.common.collect.testing.SampleElements;
 import com.google.common.collect.testing.TestMapGenerator;
 import com.google.common.collect.testing.TestSetGenerator;
 import com.google.common.collect.testing.TestSubjectGenerator;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Derived suite generators for Guava collection interfaces, split out of the suite builders so that
@@ -40,8 +43,10 @@ import java.util.Set;
  * @author Louis Wasserman
  */
 @GwtCompatible
+@NullMarked
 public final class DerivedGoogleCollectionGenerators {
-  public static class MapGenerator<K, V> implements TestMapGenerator<K, V>, DerivedGenerator {
+  public static class MapGenerator<K extends @Nullable Object, V extends @Nullable Object>
+      implements TestMapGenerator<K, V>, DerivedGenerator {
 
     private final OneSizeTestContainerGenerator<BiMap<K, V>, Entry<K, V>> generator;
 
@@ -51,7 +56,7 @@ public final class DerivedGoogleCollectionGenerators {
     }
 
     @Override
-    public SampleElements<Map.Entry<K, V>> samples() {
+    public SampleElements<Entry<K, V>> samples() {
       return generator.samples();
     }
 
@@ -61,12 +66,12 @@ public final class DerivedGoogleCollectionGenerators {
     }
 
     @Override
-    public Map.Entry<K, V>[] createArray(int length) {
+    public Entry<K, V>[] createArray(int length) {
       return generator.createArray(length);
     }
 
     @Override
-    public Iterable<Map.Entry<K, V>> order(List<Map.Entry<K, V>> insertionOrder) {
+    public Iterable<Entry<K, V>> order(List<Entry<K, V>> insertionOrder) {
       return generator.order(insertionOrder);
     }
 
@@ -82,12 +87,13 @@ public final class DerivedGoogleCollectionGenerators {
       return (V[]) new Object[length];
     }
 
+    @Override
     public TestSubjectGenerator<?> getInnerGenerator() {
       return generator;
     }
   }
 
-  public static class InverseBiMapGenerator<K, V>
+  public static class InverseBiMapGenerator<K extends @Nullable Object, V extends @Nullable Object>
       implements TestBiMapGenerator<V, K>, DerivedGenerator {
 
     private final OneSizeTestContainerGenerator<BiMap<K, V>, Entry<K, V>> generator;
@@ -98,14 +104,19 @@ public final class DerivedGoogleCollectionGenerators {
     }
 
     @Override
-    public SampleElements<Map.Entry<V, K>> samples() {
+    public SampleElements<Entry<V, K>> samples() {
       SampleElements<Entry<K, V>> samples = generator.samples();
-      return new SampleElements<Map.Entry<V, K>>(reverse(samples.e0()), reverse(samples.e1()),
-          reverse(samples.e2()), reverse(samples.e3()), reverse(samples.e4()));
+      return new SampleElements<>(
+          reverse(samples.e0()),
+          reverse(samples.e1()),
+          reverse(samples.e2()),
+          reverse(samples.e3()),
+          reverse(samples.e4()));
     }
 
-    private Map.Entry<V, K> reverse(Map.Entry<K, V> entry) {
-      return Helpers.mapEntry(entry.getValue(), entry.getKey());
+    private Entry<V, K> reverse(Entry<K, V> entry) {
+      checkNotNull(entry);
+      return mapEntry(entry.getValue(), entry.getKey());
     }
 
     @SuppressWarnings("unchecked")
@@ -120,8 +131,8 @@ public final class DerivedGoogleCollectionGenerators {
 
     @SuppressWarnings("unchecked")
     @Override
-    public Map.Entry<V, K>[] createArray(int length) {
-      return new Entry[length];
+    public Entry<V, K>[] createArray(int length) {
+      return (Entry<V, K>[]) new Entry<?, ?>[length];
     }
 
     @Override
@@ -141,28 +152,28 @@ public final class DerivedGoogleCollectionGenerators {
       return (K[]) new Object[length];
     }
 
+    @Override
     public TestSubjectGenerator<?> getInnerGenerator() {
       return generator;
     }
   }
 
-  public static class BiMapValueSetGenerator<K, V>
+  public static class BiMapValueSetGenerator<K extends @Nullable Object, V extends @Nullable Object>
       implements TestSetGenerator<V>, DerivedGenerator {
-    private final OneSizeTestContainerGenerator<BiMap<K, V>, Map.Entry<K, V>>
-        mapGenerator;
+    private final OneSizeTestContainerGenerator<BiMap<K, V>, Entry<K, V>> mapGenerator;
     private final SampleElements<V> samples;
 
     public BiMapValueSetGenerator(
         OneSizeTestContainerGenerator<BiMap<K, V>, Entry<K, V>> mapGenerator) {
       this.mapGenerator = mapGenerator;
-      final SampleElements<Map.Entry<K, V>> mapSamples =
-          this.mapGenerator.samples();
-      this.samples = new SampleElements<V>(
-          mapSamples.e0().getValue(),
-          mapSamples.e1().getValue(),
-          mapSamples.e2().getValue(),
-          mapSamples.e3().getValue(),
-          mapSamples.e4().getValue());
+      SampleElements<Entry<K, V>> mapSamples = this.mapGenerator.samples();
+      this.samples =
+          new SampleElements<>(
+              mapSamples.e0().getValue(),
+              mapSamples.e1().getValue(),
+              mapSamples.e2().getValue(),
+              mapSamples.e3().getValue(),
+              mapSamples.e4().getValue());
     }
 
     @Override
@@ -176,15 +187,13 @@ public final class DerivedGoogleCollectionGenerators {
       V[] valuesArray = (V[]) elements;
 
       // Start with a suitably shaped collection of entries
-      Collection<Map.Entry<K, V>> originalEntries =
-          mapGenerator.getSampleElements(elements.length);
+      Collection<Entry<K, V>> originalEntries = mapGenerator.getSampleElements(elements.length);
 
       // Create a copy of that, with the desired value for each value
-      Collection<Map.Entry<K, V>> entries =
-          new ArrayList<Entry<K, V>>(elements.length);
+      Collection<Entry<K, V>> entries = new ArrayList<>(elements.length);
       int i = 0;
-      for (Map.Entry<K, V> entry : originalEntries) {
-        entries.add(Helpers.mapEntry(entry.getKey(), valuesArray[i++]));
+      for (Entry<K, V> entry : originalEntries) {
+        entries.add(mapEntry(entry.getKey(), valuesArray[i++]));
       }
 
       return mapGenerator.create(entries.toArray()).values();
@@ -192,8 +201,8 @@ public final class DerivedGoogleCollectionGenerators {
 
     @Override
     public V[] createArray(int length) {
-      final V[] vs = ((TestBiMapGenerator<K, V>) mapGenerator.getInnerGenerator())
-          .createValueArray(length);
+      V[] vs =
+          ((TestBiMapGenerator<K, V>) mapGenerator.getInnerGenerator()).createValueArray(length);
       return vs;
     }
 
@@ -202,6 +211,7 @@ public final class DerivedGoogleCollectionGenerators {
       return insertionOrder;
     }
 
+    @Override
     public TestSubjectGenerator<?> getInnerGenerator() {
       return mapGenerator;
     }
